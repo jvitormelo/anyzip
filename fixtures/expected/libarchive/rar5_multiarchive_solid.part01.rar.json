@@ -1,0 +1,47 @@
+{
+  "entries": [
+    {
+      "md5": "6c752dc783e3baf373af4079a08a5b9b",
+      "path": "cebula.txt",
+      "size": 814
+    },
+    {
+      "md5": "2e01b70f6711145cfd2e52ed8b844060",
+      "path": "test.bin",
+      "size": 1200
+    },
+    {
+      "md5": "b0ee823da852a3d713823eb5d04760bb",
+      "path": "test1.bin",
+      "size": 4096
+    },
+    {
+      "md5": "dbd7c92b813bf96e9a78e87f18e2b7b9",
+      "path": "test2.bin",
+      "size": 4096
+    },
+    {
+      "md5": "47e419033b015612ca7e745e6f901520",
+      "path": "test3.bin",
+      "size": 4096
+    },
+    {
+      "md5": "067610695188b994e2dec3b4543e62e6",
+      "path": "test4.bin",
+      "size": 4096
+    },
+    {
+      "md5": "b3e8652a5d66dc60fd78d720e21ec008",
+      "path": "test5.bin",
+      "size": 4096
+    },
+    {
+      "md5": "c7333a188fb1d2bf893bd5d7d7764879",
+      "path": "test6.bin",
+      "size": 4096
+    }
+  ],
+  "format": "rar",
+  "recovered": true,
+  "skipped": []
+}

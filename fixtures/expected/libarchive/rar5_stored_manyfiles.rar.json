@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "md5": "71c5ad7dcecf4b75fdb3334e3df861a3",
+      "path": "make_uue.tcl",
+      "size": 405
+    },
+    {
+      "md5": "6c752dc783e3baf373af4079a08a5b9b",
+      "path": "cebula.txt",
+      "size": 814
+    },
+    {
+      "md5": "2e01b70f6711145cfd2e52ed8b844060",
+      "path": "test.bin",
+      "size": 1200
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": []
+}

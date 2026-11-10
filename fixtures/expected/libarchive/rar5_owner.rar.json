@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "md5": "e7df7cd2ca07f4f1ab415d457a6e1c13",
+      "path": "root.txt",
+      "size": 5
+    },
+    {
+      "md5": "53ac4bc41ee4ec77888ed4aa50677247",
+      "path": "nobody.txt",
+      "size": 5
+    },
+    {
+      "md5": "9e6b1b425e8c68d99517d849d020c8b7",
+      "path": "numeric.txt",
+      "size": 5
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": []
+}

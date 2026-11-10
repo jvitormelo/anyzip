@@ -1,0 +1,39 @@
+name: fuzz
+
+# Nightly: 30 min per target. On PRs: 60 s per target as a smoke test.
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [fuzz_detect, fuzz_zip, fuzz_sevenz, fuzz_rar]
+    env:
+      SECONDS_PER_TARGET: ${{ github.event_name == 'pull_request' && 60 || 1800 }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install nightly --profile minimal
+      - run: cargo +nightly install cargo-fuzz --locked
+      - uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - working-directory: fuzz
+        run: |
+          mkdir -p corpus/${{ matrix.target }}
+          cargo +nightly fuzz run -O ${{ matrix.target }} corpus/${{ matrix.target }} \
+            ../fixtures/generated ../fixtures/libarchive -- \
+            -max_total_time=$SECONDS_PER_TARGET -rss_limit_mb=2048 -timeout=10 -max_len=4194304
+      # A crash or timeout becomes a regression fixture (fixtures/generated) and an issue.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts

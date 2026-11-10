@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "cf4b46718a922bb2c96ab3ee2ad1a186",
+      "path": "bar.txt",
+      "size": 16
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "foo.txt",
+      "reason": "encrypted"
+    }
+  ]
+}

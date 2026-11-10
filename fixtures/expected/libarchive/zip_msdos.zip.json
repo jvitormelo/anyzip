@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "path": "abc",
+      "size": 0
+    },
+    {
+      "md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "path": "def/foo",
+      "size": 0
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

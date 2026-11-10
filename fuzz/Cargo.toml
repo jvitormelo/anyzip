@@ -1,0 +1,40 @@
+[package]
+name = "anyzip-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+anyzip = { path = "../crates/anyzip" }
+
+[[bin]]
+name = "fuzz_detect"
+path = "fuzz_targets/fuzz_detect.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_zip"
+path = "fuzz_targets/fuzz_zip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_sevenz"
+path = "fuzz_targets/fuzz_sevenz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_rar"
+path = "fuzz_targets/fuzz_rar.rs"
+test = false
+doc = false
+bench = false

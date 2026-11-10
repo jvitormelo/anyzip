@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "e65c2dc70a97288964dd6beedf57a836",
+      "path": "payload/inner.zip",
+      "size": 165
+    },
+    {
+      "md5": "2a373cd2fa5bbf4153318b9f0becf896",
+      "path": "payload/real_after.txt",
+      "size": 21
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": []
+}

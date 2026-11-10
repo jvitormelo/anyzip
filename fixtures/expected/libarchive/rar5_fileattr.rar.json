@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "md5": "6363779ec550e0084126a80b3fd30ffe",
+      "path": "readonly.txt",
+      "size": 11
+    },
+    {
+      "md5": "23522a9da06d756cb13ab535ffc2e299",
+      "path": "hidden.txt",
+      "size": 11
+    },
+    {
+      "md5": "fbf050e17558e4559a4588417f1248f9",
+      "path": "system.txt",
+      "size": 11
+    },
+    {
+      "md5": "dff2b7840c9998c7efc1ea9b183da4a6",
+      "path": "ro_hidden.txt",
+      "size": 11
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": []
+}

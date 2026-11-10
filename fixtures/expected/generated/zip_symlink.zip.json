@@ -1,0 +1,25 @@
+{
+  "entries": [
+    {
+      "md5": "cdebb7089481e6a8508dac580c7178ca",
+      "path": "real.txt",
+      "size": 10
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "link-to-passwd",
+      "reason": "symlink"
+    },
+    {
+      "path": "link-rel",
+      "reason": "symlink"
+    },
+    {
+      "path": "fifo",
+      "reason": "notAFile"
+    }
+  ]
+}

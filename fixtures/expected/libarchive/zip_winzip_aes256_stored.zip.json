@@ -1,0 +1,11 @@
+{
+  "entries": [],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "README",
+      "reason": "encrypted"
+    }
+  ]
+}

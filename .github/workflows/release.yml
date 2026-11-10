@@ -1,0 +1,91 @@
+name: release
+
+# Tag anyzip-vX.Y.Z → build each platform → publish (gated on vars.ANYZIP_PUBLISH == 'true').
+on:
+  push:
+    tags: ["anyzip-v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # manylinux_2_28: glibc 2.28 baseline (Vercel's AL2023 has 2.34, Debian 12 has 2.36) and a
+          # modern gcc whose libstdc++.a gets linked in statically by unrar-sys.
+          - target: x86_64-unknown-linux-gnu
+            platform: linux-x64-gnu
+            runner: ubuntu-24.04
+            image: quay.io/pypa/manylinux_2_28_x86_64
+          - target: aarch64-unknown-linux-gnu
+            platform: linux-arm64-gnu
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux_2_28_aarch64
+          - target: aarch64-apple-darwin
+            platform: darwin-arm64
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build in manylinux
+        if: matrix.image
+        run: |
+          docker run --rm -v "$PWD":/src -w /src ${{ matrix.image }} bash -euc '
+            curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+            . "$HOME/.cargo/env"
+            cargo build --release -p anyzip-napi'
+          sudo chown -R "$(id -u)" target
+          cp target/release/libanyzip_napi.so npm/anyzip.${{ matrix.platform }}.node
+          # Fail if anything needs a newer glibc than the baseline.
+          ! objdump -T npm/anyzip.${{ matrix.platform }}.node | grep -oE 'GLIBC_2\.(29|[3-9][0-9])' 
+      - name: Build on macOS
+        if: ${{ !matrix.image }}
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          cargo build --release -p anyzip-napi
+          cp target/release/libanyzip_napi.dylib npm/anyzip.${{ matrix.platform }}.node
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.platform }}
+          path: npm/anyzip.${{ matrix.platform }}.node
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/anyzip-v') && vars.ANYZIP_PUBLISH == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#anyzip-v}"
+          PKG_VERSION="$(node -p "require('./npm/package.json').version")"
+          test "$TAG_VERSION" = "$PKG_VERSION" || { echo "tag ($TAG_VERSION) != npm/package.json ($PKG_VERSION)"; exit 1; }
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      # Generates index.js / index.d.ts; the host .node it also builds is replaced below.
+      - working-directory: npm
+        run: bun run build
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: npm/artifacts
+      - working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_ACCESS: public
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          bunx napi create-npm-dirs
+          bunx napi artifacts --output-dir artifacts
+          bunx napi prepublish -t npm --no-gh-release
+          npm publish --provenance --access public

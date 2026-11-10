@@ -1,0 +1,11 @@
+{
+  "entries": [],
+  "format": "zip",
+  "recovered": true,
+  "skipped": [
+    {
+      "path": "",
+      "reason": "unsafePath"
+    }
+  ]
+}

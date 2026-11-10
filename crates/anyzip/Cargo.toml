@@ -1,0 +1,44 @@
+[package]
+name = "anyzip"
+description = "Extract zip, 7z and rar from bytes in memory, safely: typed errors, limits, no panics across the API."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["rar"]
+rar = ["dep:unrar-sys"]
+
+[dependencies]
+zip = { version = "9.5", default-features = false, features = [
+  "deflate-flate2-zlib-rs",
+  "deflate64",
+  "bzip2",
+  "lzma",
+  "xz",
+  "zstd",
+  "ppmd",
+] }
+sevenz-rust2 = { version = "0.25", default-features = false, features = ["bzip2", "deflate", "ppmd", "zstd", "aes256"] }
+oem_cp = "2.1"
+# 7z single-stream LZMA2 fast path: ~1.5x the decode speed of lzma-rust2 (C, built from source).
+liblzma = { version = "0.4.9", default-features = false, features = ["static"] }
+crc32fast = "1"
+unrar-sys = { path = "../unrar-sys", optional = true }
+tempfile = "3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+md-5 = "0.10"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+proptest = "1"

@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "path": "file0",
+      "size": 0
+    },
+    {
+      "md5": "3bdefc27c008f6633fc4ef035f7e89ff",
+      "path": "build.sh",
+      "size": 23
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

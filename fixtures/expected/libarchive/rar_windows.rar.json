@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "md5": "22bdcca706d19e6d73da148dc2d65c31",
+      "path": "testdir/test.txt",
+      "size": 16
+    },
+    {
+      "md5": "22bdcca706d19e6d73da148dc2d65c31",
+      "path": "test.txt",
+      "size": 16
+    },
+    {
+      "md5": "6d5be1550717cd653aeda9e0773fbe64",
+      "path": "testshortcut.lnk",
+      "size": 441
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": []
+}

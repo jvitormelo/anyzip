@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "md5": "888d0ee361af3603736f32131e7b20a2",
+      "path": "archive_file.txt",
+      "size": 7
+    },
+    {
+      "md5": "662f707d5491e9bce8238a6c0be92190",
+      "path": "hidden_file.txt",
+      "size": 6
+    },
+    {
+      "md5": "336ebbb2179beaa7340a4f1620f3af40",
+      "path": "readonly_file.txt",
+      "size": 8
+    },
+    {
+      "md5": "54b53072540eeeb8f8e9343e71f28176",
+      "path": "system_file.txt",
+      "size": 6
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": []
+}

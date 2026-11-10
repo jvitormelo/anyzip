@@ -1,0 +1,23 @@
+{
+  "entries": [],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "Makefile",
+      "reason": "encrypted"
+    },
+    {
+      "path": "NEWS",
+      "reason": "encrypted"
+    },
+    {
+      "path": "README",
+      "reason": "encrypted"
+    },
+    {
+      "path": "config.h",
+      "reason": "encrypted"
+    }
+  ]
+}

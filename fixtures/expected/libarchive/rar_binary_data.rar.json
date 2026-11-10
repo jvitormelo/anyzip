@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "552a81068d9afaf0c1d16ac5b67d8591",
+      "path": "random_data.bin",
+      "size": 1048576
+    },
+    {
+      "md5": "7a62e1f1e14417a89b13cb91c021dad5",
+      "path": "LibarchiveAddingTest.odt",
+      "size": 32618
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": []
+}

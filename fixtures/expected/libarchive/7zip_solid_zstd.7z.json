@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "md5": "cdd840c6e994e6ccefe8b2b67e810017",
+      "path": "dir1/file1",
+      "size": 13
+    },
+    {
+      "md5": "f45d7f6eee455f7aaeaee72505bb8951",
+      "path": "file2",
+      "size": 26
+    },
+    {
+      "md5": "97c3c79482e30176e83a39e11ba87027",
+      "path": "file3",
+      "size": 39
+    },
+    {
+      "md5": "2e11b435ab2247400b73b3596d3bf57a",
+      "path": "file4",
+      "size": 52
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": []
+}

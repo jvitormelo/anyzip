@@ -1,0 +1,14 @@
+{
+  "name": "anyzip-bench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "bun bench.ts",
+    "bench:node": "node bench.ts"
+  },
+  "dependencies": {
+    "@licitei/anyzip": "workspace:*",
+    "fflate": "^0.8.2",
+    "libarchive-wasm": "^1.2.0"
+  }
+}

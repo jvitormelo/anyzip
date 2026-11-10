@@ -1,0 +1,14 @@
+/target
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
+node_modules/
+*.node
+/npm/index.js
+/npm/index.d.ts
+/npm/README.md
+/npm/LICENSE-*
+/npm/npm/
+/npm/artifacts/
+/fixtures/real/
+/fuzz/coverage

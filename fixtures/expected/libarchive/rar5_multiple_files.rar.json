@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "md5": "b0ee823da852a3d713823eb5d04760bb",
+      "path": "test1.bin",
+      "size": 4096
+    },
+    {
+      "md5": "dbd7c92b813bf96e9a78e87f18e2b7b9",
+      "path": "test2.bin",
+      "size": 4096
+    },
+    {
+      "md5": "47e419033b015612ca7e745e6f901520",
+      "path": "test3.bin",
+      "size": 4096
+    },
+    {
+      "md5": "067610695188b994e2dec3b4543e62e6",
+      "path": "test4.bin",
+      "size": 4096
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": []
+}

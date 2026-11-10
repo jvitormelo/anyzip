@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "dcf7943ff4c71bb61c38153fedca6a55",
+      "path": "hw-gnueabihf",
+      "size": 7804
+    },
+    {
+      "md5": "99d76470e21e233b9aad9c679ad3f51c",
+      "path": "hw-arm64",
+      "size": 70368
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": []
+}

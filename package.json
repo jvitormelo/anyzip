@@ -1,0 +1,8 @@
+{
+  "name": "anyzip-workspace",
+  "private": true,
+  "workspaces": ["npm", "bench"],
+  "devDependencies": {
+    "@licitei/anyzip": "workspace:*"
+  }
+}

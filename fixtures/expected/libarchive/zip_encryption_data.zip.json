@@ -1,0 +1,15 @@
+{
+  "entries": [],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "bar.txt",
+      "reason": "encrypted"
+    },
+    {
+      "path": "foo.txt",
+      "reason": "encrypted"
+    }
+  ]
+}

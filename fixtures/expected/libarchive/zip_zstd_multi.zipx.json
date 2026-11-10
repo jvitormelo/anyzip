@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "md5": "624d033f31e2b301ffa67e4c028d9102",
+      "path": "smartd.conf",
+      "size": 6699
+    },
+    {
+      "md5": "df71e7d0671fd4beeba073eb13f15c37",
+      "path": "ts.conf",
+      "size": 852
+    },
+    {
+      "md5": "952c332f2f2705f310ac5d5d218b87cb",
+      "path": "vimrc",
+      "size": 912
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

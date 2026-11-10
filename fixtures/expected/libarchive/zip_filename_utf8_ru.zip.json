@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "1b7d75c50afd00330e0ad5d7742d008a",
+      "path": "ПРИВЕТ",
+      "size": 6
+    },
+    {
+      "md5": "1b7d75c50afd00330e0ad5d7742d008a",
+      "path": "привет",
+      "size": 6
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

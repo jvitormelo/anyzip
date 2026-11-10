@@ -1,0 +1,21 @@
+{
+  "entries": [
+    {
+      "md5": "b1859042bff83537544f512f7b63eaf9",
+      "path": "libxkbcommon-x11.so.0.0.0",
+      "size": 50280
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "libxkbcommon-x11.so",
+      "reason": "symlink"
+    },
+    {
+      "path": "libxkbcommon-x11.so.0",
+      "reason": "symlink"
+    }
+  ]
+}

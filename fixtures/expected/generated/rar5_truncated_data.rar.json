@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "5033d745f237a5c3c3d1aeee902a06ea",
+      "path": "completo_0.pdf",
+      "size": 40016
+    },
+    {
+      "md5": "e64be0e115b8c07429ebb93bbc96573b",
+      "path": "completo_1.txt",
+      "size": 550
+    }
+  ],
+  "format": "rar",
+  "recovered": true,
+  "skipped": []
+}

@@ -1,0 +1,25 @@
+{
+  "entries": [
+    {
+      "md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "path": "licitação/anexos/vazio.txt",
+      "size": 0
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "licitação/anexos/planilha orçamentária.txt",
+      "reason": "encrypted"
+    },
+    {
+      "path": "licitação/edital nº 12-2025.pdf",
+      "reason": "encrypted"
+    },
+    {
+      "path": "日本語.txt",
+      "reason": "encrypted"
+    }
+  ]
+}

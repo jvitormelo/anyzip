@@ -1,0 +1,18 @@
+[package]
+name = "unrar-sys"
+description = "Official UnRAR source (RARLAB) vendored and compiled with cc, plus raw FFI bindings for the DLL API."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT OR Apache-2.0 AND LicenseRef-UnRAR"
+links = "unrar"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+cc = { version = "1.2", features = ["parallel"] }

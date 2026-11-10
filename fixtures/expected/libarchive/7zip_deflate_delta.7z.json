@@ -1,0 +1,12 @@
+{
+  "entries": [
+    {
+      "md5": "eb890190bf05c1efe4ad1d82ddf9632c",
+      "path": "delta_payload.bin",
+      "size": 262144
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": []
+}

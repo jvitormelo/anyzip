@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "797114467be6724d62241f1685e642cd",
+      "path": "inner.zip",
+      "size": 594
+    },
+    {
+      "md5": "dd82af1ac843842cd2be5f92a369213e",
+      "path": "inner.7z",
+      "size": 45801
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "020861c8c3fe177da19a7e9539a5dbac",
+      "path": "file3",
+      "size": 8
+    },
+    {
+      "md5": "6d704e4b1336e1902a1c8da3d7ee7f94",
+      "path": "__MACOSX/._file3",
+      "size": 287
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

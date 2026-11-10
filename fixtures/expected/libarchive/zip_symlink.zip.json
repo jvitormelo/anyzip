@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "bbe02f946d5455d74616fc9777557c22",
+      "path": "file",
+      "size": 5
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "symlink",
+      "reason": "symlink"
+    }
+  ]
+}

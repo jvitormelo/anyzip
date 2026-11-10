@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "5033d745f237a5c3c3d1aeee902a06ea",
+      "path": "descriptor.pdf",
+      "size": 40016
+    },
+    {
+      "md5": "c20b75325c19abc1de05812b608ad7cc",
+      "path": "descriptor2.txt",
+      "size": 900
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

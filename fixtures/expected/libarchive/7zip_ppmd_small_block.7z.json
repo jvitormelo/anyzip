@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "md5": "2eff0e303c618f334463dbc32eacdcf5",
+      "path": "test0.dat",
+      "size": 1024
+    },
+    {
+      "md5": "ae2b3793c952282a0df0447229709218",
+      "path": "test1.dat",
+      "size": 1024
+    },
+    {
+      "md5": "ac45f7f8f4f282f76c2e2cd3cd3eee7a",
+      "path": "test2.dat",
+      "size": 1024
+    },
+    {
+      "md5": "4fa1e550c5a4661fc84cf5239447c74f",
+      "path": "test3.dat",
+      "size": 1024
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": []
+}

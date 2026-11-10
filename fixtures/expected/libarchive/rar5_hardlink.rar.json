@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "e7df7cd2ca07f4f1ab415d457a6e1c13",
+      "path": "file.txt",
+      "size": 5
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "hardlink.txt",
+      "reason": "notAFile"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "d3b07384d113edec49eaa6238ad5ff00",
+      "path": "bar_unencrypted.txt",
+      "size": 4
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "bar_encrypted.txt",
+      "reason": "encrypted"
+    }
+  ]
+}

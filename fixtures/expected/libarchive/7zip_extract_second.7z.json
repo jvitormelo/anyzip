@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "7f6fd1b6d872108bd44bd143cbcdfa19",
+      "path": "first.txt",
+      "size": 65536
+    },
+    {
+      "md5": "b408d88daa47df7cb5ea3e2e5550bd3d",
+      "path": "second.txt",
+      "size": 23
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": []
+}

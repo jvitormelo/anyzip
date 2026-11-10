@@ -1,0 +1,11 @@
+{
+  "entries": [],
+  "format": "rar",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "file.txt",
+      "reason": "encrypted"
+    }
+  ]
+}

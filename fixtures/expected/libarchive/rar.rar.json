@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "md5": "f03f566a28784ddb31d216e6a5056e83",
+      "path": "test.txt",
+      "size": 20
+    },
+    {
+      "md5": "f03f566a28784ddb31d216e6a5056e83",
+      "path": "testdir/test.txt",
+      "size": 20
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "testlink",
+      "reason": "symlink"
+    }
+  ]
+}

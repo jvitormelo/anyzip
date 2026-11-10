@@ -1,0 +1,21 @@
+{
+  "entries": [
+    {
+      "md5": "6cd3556deb0da54bca060b4c39479839",
+      "path": "👋🌎.txt",
+      "size": 13
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "Ⓗⓐⓡⓓ Ⓛⓘⓝⓚ.txt",
+      "reason": "notAFile"
+    },
+    {
+      "path": "𝒮𝓎𝓂𝒷𝑜𝓁𝒾𝒸 𝐿𝒾𝓃𝓀.txt",
+      "reason": "symlink"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "name": "@licitei/anyzip",
+  "version": "0.1.0",
+  "description": "Extract zip, 7z and rar from bytes in memory. Native (Rust + UnRAR), off the event loop, safe against hostile archives.",
+  "license": "(MIT OR Apache-2.0) AND LicenseRef-UnRAR",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/licitei/anyzip.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "anyzip.js",
+  "types": "anyzip.d.ts",
+  "files": [
+    "anyzip.js",
+    "anyzip.d.ts",
+    "index.js",
+    "index.d.ts",
+    "README.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "LICENSE-UNRAR.txt"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "napi": {
+    "binaryName": "anyzip",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-apple-darwin"
+    ]
+  },
+  "scripts": {
+    "build": "napi build --platform --release --manifest-path ../crates/anyzip-napi/Cargo.toml --output-dir . --js index.js --dts index.d.ts && cp ../README.md ../LICENSE-MIT ../LICENSE-APACHE ../crates/unrar-sys/LICENSE-UNRAR.txt .",
+    "build:debug": "napi build --platform --manifest-path ../crates/anyzip-napi/Cargo.toml --output-dir . --js index.js --dts index.d.ts",
+    "test": "bun test && node --test test/*.test.ts",
+    "test:bun": "bun test",
+    "test:node": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.4.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

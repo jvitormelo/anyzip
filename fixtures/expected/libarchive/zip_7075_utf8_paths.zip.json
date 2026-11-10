@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "md5": "edc900745c5d15d773fbcdc0b376f00c",
+      "path": "File 1.txt",
+      "size": 9
+    },
+    {
+      "md5": "edc900745c5d15d773fbcdc0b376f00c",
+      "path": "File 2 - ö.txt",
+      "size": 9
+    },
+    {
+      "md5": "edc900745c5d15d773fbcdc0b376f00c",
+      "path": "File 3 - ä.txt",
+      "size": 9
+    },
+    {
+      "md5": "edc900745c5d15d773fbcdc0b376f00c",
+      "path": "File 4 - å.txt",
+      "size": 9
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

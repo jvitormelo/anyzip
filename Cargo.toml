@@ -1,0 +1,37 @@
+[workspace]
+resolver = "3"
+members = ["crates/anyzip", "crates/unrar-sys", "crates/anyzip-napi"]
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.88"
+repository = "https://github.com/licitei/anyzip"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+allow_attributes_without_reason = "deny"
+
+# Decoders are unusable unoptimised (the golden bombs decode 1 GiB); our own code stays debuggable.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+# unwind, never abort: a panic inside an engine must become a typed error, not kill the Node process.
+panic = "unwind"
+
+[profile.bench]
+inherits = "release"
+strip = false
+debug = 1

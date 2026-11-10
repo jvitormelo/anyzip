@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "d317ac374e9302fa20de0a5a90bfc77b",
+      "path": "file1",
+      "size": 32
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "symlinkfile",
+      "reason": "symlink"
+    }
+  ]
+}

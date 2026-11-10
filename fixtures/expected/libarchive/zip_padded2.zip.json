@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "56a3b0e65febddf6197b728f8f95e6cd",
+      "path": "file0",
+      "size": 6
+    },
+    {
+      "md5": "5149d403009a139c7e085405ef762e1a",
+      "path": "file1",
+      "size": 6
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

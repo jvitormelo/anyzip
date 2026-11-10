@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "2aae2c57ec1cec8369720f34fced6ccf",
+      "path": "_installdir/abc_tools/2000.9-beta11/samples/abc_measurement_analysis_sample/src/abc_measurement_analysis_sample.py",
+      "size": 250
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "_installdir/abc_tools/1000.9-beta11/bin/abc_measurement_analysis_sample",
+      "reason": "symlink"
+    }
+  ]
+}

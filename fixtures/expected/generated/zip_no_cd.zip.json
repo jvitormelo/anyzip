@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "md5": "f6dd734a8d2a581f1d71c287f9e414f9",
+      "path": "parte0.pdf",
+      "size": 40017
+    },
+    {
+      "md5": "5816fba98a6cbe06648fefb9657fef1c",
+      "path": "parte1.pdf",
+      "size": 40017
+    },
+    {
+      "md5": "67176b1da08926b089311b45fbee28a2",
+      "path": "parte2.pdf",
+      "size": 40017
+    }
+  ],
+  "format": "zip",
+  "recovered": true,
+  "skipped": []
+}

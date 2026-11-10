@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "md5": "78943e839b05c89a973845de122285a2",
+      "path": "LibarchiveAddingTest.html",
+      "size": 20111
+    },
+    {
+      "md5": "f03f566a28784ddb31d216e6a5056e83",
+      "path": "testdir/test.txt",
+      "size": 20
+    },
+    {
+      "md5": "78943e839b05c89a973845de122285a2",
+      "path": "testdir/LibarchiveAddingTest.html",
+      "size": 20111
+    }
+  ],
+  "format": "rar",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "testlink",
+      "reason": "symlink"
+    }
+  ]
+}

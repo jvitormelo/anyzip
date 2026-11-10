@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "md5": "7ada69e863428a4ea78c3de4ff747135",
+      "path": "bash.bashrc",
+      "size": 2245
+    },
+    {
+      "md5": "a74be5548ab4743ef05712ebff0b8472",
+      "path": "pacman.conf",
+      "size": 2566
+    },
+    {
+      "md5": "4fcca5adf68ec8d4107480476ef03a1f",
+      "path": "profile",
+      "size": 6601
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

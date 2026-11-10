@@ -1,0 +1,51 @@
+{
+  "entries": [
+    {
+      "md5": "6433a00621e856309be9d709bafbcf37",
+      "path": "dir/sub/back.txt",
+      "size": 27
+    },
+    {
+      "md5": "7dacb75cbd5784bf98aabbc608fbfc37",
+      "path": "dot/double.txt",
+      "size": 28
+    },
+    {
+      "md5": "04e3073d4635d0f18f3d435c8849b8f7",
+      "path": "ok.txt",
+      "size": 17
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "../evil.txt",
+      "reason": "unsafePath"
+    },
+    {
+      "path": "/etc/passwd",
+      "reason": "unsafePath"
+    },
+    {
+      "path": "C:\\Windows\\win.ini",
+      "reason": "unsafePath"
+    },
+    {
+      "path": "ok/../../escape.txt",
+      "reason": "unsafePath"
+    },
+    {
+      "path": "ctrl\u0001char.txt",
+      "reason": "unsafePath"
+    },
+    {
+      "path": "nul\u0000byte.txt",
+      "reason": "unsafePath"
+    },
+    {
+      "path": "..",
+      "reason": "unsafePath"
+    }
+  ]
+}

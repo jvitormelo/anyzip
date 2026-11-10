@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "md5": "0ccb00fc6b4e4c49e73da7d0635fb668",
+      "path": "aberto.txt",
+      "size": 10
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": [
+    {
+      "path": "secreto.pdf",
+      "reason": "encrypted"
+    }
+  ]
+}

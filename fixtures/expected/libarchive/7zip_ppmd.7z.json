@@ -1,0 +1,12 @@
+{
+  "entries": [
+    {
+      "md5": "2d0d9ff7eac152d0cc8fe67fa28aeac0",
+      "path": "ppmd_test.txt",
+      "size": 102400
+    }
+  ],
+  "format": "7z",
+  "recovered": false,
+  "skipped": []
+}
