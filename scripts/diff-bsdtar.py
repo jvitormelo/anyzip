@@ -1,6 +1,6 @@
 """Differential test: anyzip vs bsdtar.
 
-    python3 -I scripts/diff-bsdtar.py [--dump PATH] [--known fixtures/diffs.json] FILE...
+    python3 -I scripts/diff-bsdtar.py [--dump PATH] [--bsdtar PATH] [--known fixtures/diffs.json] FILE...
 
 For each archive, compares the set of (path, md5) of regular files. bsdtar runs with
 `--options zip:hdrcharset=CP850` into an empty directory; symlinks it creates are ignored, matching
@@ -9,10 +9,12 @@ our skipped entries. When anyzip returns an error, the comparison is against "no
 Exit 1 if any archive differs and is not listed in the known-diffs file with a reason.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 import argparse
 import hashlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -20,14 +22,24 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def bsdtar_files(archive):
-    with tempfile.TemporaryDirectory(prefix="anyzip-diff-") as out:
-        # `--passphrase ""` avoids libarchive's 1s-per-entry anti-bruteforce sleep on encrypted zips.
-        proc = subprocess.run(
-            ["bsdtar", "-xf", os.path.abspath(archive), "-C", out, "--no-same-owner",
+def bsdtar_files(bsdtar, archive):
+    with tempfile.TemporaryDirectory(prefix="anyzip-diff-") as out, tempfile.TemporaryFile() as errf:
+        # `--passphrase -` avoids libarchive's anti-bruteforce sleep on encrypted zips; `errf`
+        # avoids buffering unbounded stderr into memory if an older bsdtar loops on malformed input.
+        proc = subprocess.Popen(
+            [bsdtar, "-xf", os.path.abspath(archive), "-C", out, "--no-same-owner",
              "--no-same-permissions", "--passphrase", "-", "--options", "zip:hdrcharset=CP850"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-            timeout=120, start_new_session=True)
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=errf,
+            start_new_session=True)
+        try:
+            returncode = proc.wait(timeout=30)
+            errf.seek(0)
+            stderr = errf.read(512).decode("utf-8", "replace").strip()
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+            returncode = -1
+            stderr = "bsdtar timed out"
         for root, dirs, _names in os.walk(out):
             for d in dirs:
                 os.chmod(os.path.join(root, d), 0o700)
@@ -41,7 +53,7 @@ def bsdtar_files(archive):
                 os.chmod(full, 0o600)  # archives may carry mode 000
                 with open(full, "rb") as f:
                     files[rel] = hashlib.file_digest(f, "md5").hexdigest()
-        return files, proc.returncode, proc.stderr.decode("utf-8", "replace").strip()
+        return files, returncode, stderr
 
 
 def anyzip_results(dump, archives):
@@ -52,6 +64,7 @@ def anyzip_results(dump, archives):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dump", default=os.path.join(ROOT, "target/release/examples/dump"))
+    ap.add_argument("--bsdtar", default="bsdtar")
     ap.add_argument("--known", default=os.path.join(ROOT, "fixtures/diffs.json"))
     ap.add_argument("--verbose", "-v", action="store_true")
     ap.add_argument("files", nargs="+")
@@ -63,18 +76,24 @@ def main():
             known = json.load(f)
 
     ours = anyzip_results(args.dump, args.files)
+    to_run = [
+        a for a in args.files
+        if not (ours[a].get("error") == "tooLarge" and os.path.basename(a) in known)
+    ]
+    workers = min(8, os.cpu_count() or 4)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        bsdtar_map = dict(zip(to_run, pool.map(lambda a: bsdtar_files(args.bsdtar, a), to_run)))
+
     same = expected = new = 0
     for archive in args.files:
         name = os.path.basename(archive)
         mine = ours[archive]
-        # Known bomb / huge-dictionary fixtures would make bsdtar allocate 4 GiB or write GiBs on
-        # small CI runners; anyzip already rejected them with `tooLarge` as expected.
-        if mine.get("error") == "tooLarge" and name in known:
+        if archive not in bsdtar_map:
             expected += 1
             if args.verbose:
                 print(f"expected  {name}: {known[name]}")
             continue
-        theirs, code, err = bsdtar_files(archive)
+        theirs, code, err = bsdtar_map[archive]
         mine_files = {e["path"]: e["md5"] for e in mine.get("entries", [])}
         if mine_files == theirs and ("error" not in mine or not theirs):
             same += 1

@@ -1,6 +1,6 @@
 {
   "name": "@jvitormelo/anyzip",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Extract zip, 7z and rar from bytes in memory. Native (Rust + UnRAR), off the event loop, safe against hostile archives.",
   "license": "(MIT OR Apache-2.0) AND LicenseRef-UnRAR",
   "homepage": "https://github.com/jvitormelo/anyzip#readme",

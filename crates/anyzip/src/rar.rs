@@ -83,11 +83,11 @@ pub(crate) fn run(bytes: &[u8], budget: &mut Budget<'_>, out: &mut Out<'_>) -> R
 
         let kind = classify(&header);
         let declared = header.unpacked_size;
-        let (method, dict_size_kb) = (header.method, header.dict_size_kb);
+        let (method, dict_size_kb, host_os) = (header.method, header.dict_size_kb, header.host_os);
         let name = header
             .raw_name
             .as_deref()
-            .map_or(header.name, decode_legacy_name);
+            .map_or(header.name, |raw| decode_legacy_name(raw, host_os));
         let Some(path) = out.admit(name, kind, declared) else {
             let solid_file = !out.list_only() && info.is_solid() && kind == Kind::File;
             match skip_unextracted(
@@ -320,14 +320,14 @@ fn drain_solid(
 
 /// RAR 1.5-4 names without the Unicode flag are in the creator's charset: UTF-8 when made on Unix
 /// (what `bsdtar` assumes too), the OEM code page when made by DOS/old Windows RAR, which for us
-/// means CP850.
-fn decode_legacy_name(raw: &[u8]) -> String {
-    match std::str::from_utf8(raw) {
-        Ok(name) => name.to_owned(),
-        Err(_) => {
-            oem_cp::decode_string_complete_table(raw, &oem_cp::code_table::DECODING_TABLE_CP850)
-        }
+/// means CP850 (avoiding accidental UTF-8 decoding when CP850 bytes happen to form valid UTF-8).
+fn decode_legacy_name(raw: &[u8], host_os: u32) -> String {
+    if host_os == HOST_UNIX
+        && let Ok(name) = std::str::from_utf8(raw)
+    {
+        return name.to_owned();
     }
+    oem_cp::decode_string_complete_table(raw, &oem_cp::code_table::DECODING_TABLE_CP850)
 }
 
 fn classify(header: &Header) -> Kind {
@@ -455,5 +455,57 @@ mod tests {
                 .code,
             ErrorCode::MultiVolume
         );
+    }
+
+    fn minimal_stored_rar4(host_os: u8, name: &[u8], payload: &[u8]) -> Vec<u8> {
+        // RAR 1.5-4 signature + archive header + stored file block (no LHD_UNICODE flag).
+        let mut out = b"Rar!\x1A\x07\x00".to_vec();
+        // Archive header (type 0x73): flags=0, reserved 6 bytes
+        let main_body = [0x73u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let main_crc = (crc32fast::hash(&main_body) & 0xFFFF) as u16;
+        out.extend_from_slice(&main_crc.to_le_bytes());
+        out.push(0x73);
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(&13u16.to_le_bytes());
+        out.extend_from_slice(&[0u8; 6]);
+
+        // File header (type 0x74): flags=0x8000 (ADD_SIZE), method=0x30 (stored), ver=20
+        let pack_len = u32::try_from(payload.len()).unwrap();
+        let name_len = u16::try_from(name.len()).unwrap();
+        let head_size = u16::try_from(7 + 25 + name.len()).unwrap();
+        let file_crc = crc32fast::hash(payload);
+        let mut fh = Vec::new();
+        fh.push(0x74); // HEAD_TYPE: FILE_HEAD
+        fh.extend_from_slice(&0x8000u16.to_le_bytes()); // HEAD_FLAGS (no LHD_UNICODE)
+        fh.extend_from_slice(&head_size.to_le_bytes());
+        fh.extend_from_slice(&pack_len.to_le_bytes()); // PACK_SIZE
+        fh.extend_from_slice(&pack_len.to_le_bytes()); // UNP_SIZE
+        fh.push(host_os); // HOST_OS (0 = MSDOS, 2 = WIN32, 3 = UNIX)
+        fh.extend_from_slice(&file_crc.to_le_bytes());
+        fh.extend_from_slice(&0u32.to_le_bytes()); // FTIME
+        fh.push(20); // UNP_VER
+        fh.push(0x30); // METHOD: stored
+        fh.extend_from_slice(&name_len.to_le_bytes());
+        fh.extend_from_slice(&0x20u32.to_le_bytes()); // ATTR
+        fh.extend_from_slice(name);
+        let fh_crc = (crc32fast::hash(&fh) & 0xFFFF) as u16;
+        out.extend_from_slice(&fh_crc.to_le_bytes());
+        out.extend_from_slice(&fh);
+        out.extend_from_slice(payload);
+        out
+    }
+
+    #[test]
+    fn rar4_legacy_name_respects_host_os() {
+        // CP850 "ãé" (0xC6 0x82) happens to be valid UTF-8 ("Ƣ"): DOS/Win32 must stay CP850,
+        // Unix reads UTF-8, matching `zip.rs`.
+        for win_host in [0u8, 2u8] {
+            let rar = minimal_stored_rar4(win_host, b"\xc6\x82.txt", b"ok");
+            let out = crate::extract(&rar, &crate::Limits::default()).unwrap();
+            assert_eq!(out.entries[0].path, "ãé.txt");
+        }
+        let unix_rar = minimal_stored_rar4(3, "ação.txt".as_bytes(), b"ok");
+        let out = crate::extract(&unix_rar, &crate::Limits::default()).unwrap();
+        assert_eq!(out.entries[0].path, "ação.txt");
     }
 }

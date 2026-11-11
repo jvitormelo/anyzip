@@ -94,6 +94,8 @@ functions.
   the box on **Vercel Functions** (Node.js and Bun runtimes on AWS Lambda / Amazon Linux 2023,
   `glibc 2.34`), AWS Lambda (x86_64 and Graviton ARM64), Debian 11+, and Ubuntu 20.04+.
 - `darwin-arm64` (macOS Apple Silicon).
+- Prebuilt binaries only cover the targets above (what we run in production); Alpine (`musl`) and
+  Windows are not built yet — PRs adding targets to `release.yml` are welcome.
 - On Next.js (Vercel), mark the native addon as external in `next.config.ts`:
   `serverExternalPackages: ['@jvitormelo/anyzip']`.
 
