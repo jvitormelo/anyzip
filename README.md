@@ -17,7 +17,7 @@ touching disk.
   - Unicode and legacy (RAR4) names in rar.
 
 ```ts
-import { extract, extractEach, list, detect, AnyzipError } from '@licitei/anyzip'
+import { extract, extractEach, list, detect, AnyzipError } from 'anyzip'
 
 const { format, entries, skipped, recovered } = await extract(bytes) // Uint8Array | ArrayBuffer
 for (const { path, data } of entries) upload(path, data) // data: Buffer, no copy
@@ -88,7 +88,66 @@ functions.
   `glibc 2.34`), AWS Lambda (x86_64 and Graviton ARM64), Debian 11+, and Ubuntu 20.04+.
 - `darwin-arm64` (macOS Apple Silicon).
 - On Next.js (Vercel), mark the native addon as external in `next.config.ts`:
-  `serverExternalPackages: ['@licitei/anyzip']`.
+  `serverExternalPackages: ['anyzip']`.
+
+## Nested archives
+
+`extract` and `extractEach` unpack one level: an archive inside an archive comes back as a regular
+`Entry`. Formats such as `.docx`, `.xlsx`, `.pptx`, `.odt`, `.epub` and `.jar` are zip files
+(`PK\x03\x04`), so recursing on `detect()` alone would unpack documents into their internal XML;
+nested bombs (`42.zip`) also need a depth cap and a budget shared across levels.
+
+To flatten nested `zip`/`7z`/`rar` archives into leaf files only:
+
+```ts
+import { extname } from 'node:path'
+import { AnyzipError, detect, extractEach, type Entry } from 'anyzip'
+
+const ZIP_CONTAINERS = new Set([
+  '.docx', '.xlsx', '.pptx', '.docm', '.xlsm', '.pptm',
+  '.odt', '.ods', '.odp', '.epub', '.jar', '.apk', '.whl',
+])
+
+const isNestedArchive = (path: string, data: Buffer): boolean =>
+  !ZIP_CONTAINERS.has(extname(path).toLowerCase()) && detect(data) !== null
+
+export async function extractFlat(
+  bytes: Uint8Array | ArrayBuffer,
+  { maxDepth = 2, maxEntries = 10_000, maxTotalBytes = 512 << 20, maxRatio = 1000 } = {},
+): Promise<Entry[]> {
+  const files: Entry[] = []
+  let remainingEntries = maxEntries
+  let remainingBytes = maxTotalBytes
+
+  async function walk(buf: Uint8Array | ArrayBuffer, prefix: string, depth: number): Promise<void> {
+    await extractEach(
+      buf,
+      async (entry) => {
+        remainingEntries -= 1
+        remainingBytes -= entry.data.length
+        if (remainingEntries < 0 || remainingBytes < 0) {
+          throw new AnyzipError('tooLarge', 'nested archive limit exceeded')
+        }
+        const path = prefix ? `${prefix}/${entry.path}` : entry.path
+        if (depth < maxDepth && isNestedArchive(entry.path, entry.data)) {
+          await walk(entry.data, path, depth + 1)
+          return
+        }
+        files.push({ path, data: entry.data })
+      },
+      {
+        maxEntries: remainingEntries,
+        maxEntryBytes: remainingBytes,
+        maxTotalBytes: remainingBytes,
+        maxRatio,
+      },
+    )
+  }
+
+  await walk(bytes, '', 0)
+  return files
+}
+```
 
 ## Performance
 

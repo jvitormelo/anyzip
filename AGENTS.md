@@ -10,7 +10,7 @@ Rules for this repo (humans and agents). Context and architectural decisions liv
   - Limits, paths, and one module per format.
 - `crates/unrar-sys`: vendored UnRAR plus FFI. The only crate with C++ FFI.
 - `crates/anyzip-napi`: the N-API binding. It converts types only; no logic.
-- `npm/`: the `@licitei/anyzip` package.
+- `npm/`: the `anyzip` package.
   - The `anyzip.js`/`anyzip.d.ts` wrapper.
   - The tests, which run under both `bun test` and `node --test`.
 - `fixtures/`:

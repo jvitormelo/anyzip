@@ -3,6 +3,6 @@
   "private": true,
   "workspaces": ["npm", "bench"],
   "devDependencies": {
-    "@licitei/anyzip": "workspace:*"
+    "anyzip": "workspace:*"
   }
 }

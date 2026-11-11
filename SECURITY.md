@@ -9,5 +9,5 @@ Please **do not** open a public issue for security vulnerabilities (such as memo
 uncaught panics/aborts, path traversal bypasses, or resource limit bypasses).
 
 Report vulnerabilities privately via
-[GitHub Private Vulnerability Reporting](https://github.com/licitei/anyzip/security/advisories/new)
+[GitHub Private Vulnerability Reporting](https://github.com/jvitormelo/anyzip/security/advisories/new)
 with a minimal reproducer archive (or generator script) and the `Limits` configuration used.

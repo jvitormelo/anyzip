@@ -1,0 +1,32 @@
+{
+  "entries": [
+    {
+      "md5": "61d45f2087389e521786b37d216e2b48",
+      "path": "edital1.txt",
+      "size": 12
+    },
+    {
+      "md5": "6a26d8386dedc007bdbb6c3d48ed2142",
+      "path": "lote_7z.7z",
+      "size": 292
+    },
+    {
+      "md5": "b36919afb698f1215c98b27f1fb42ac6",
+      "path": "lote_rar.rar",
+      "size": 257
+    },
+    {
+      "md5": "a3a31e2b3121252c5c3bb3f3c074ff6f",
+      "path": "lote_zip.zip",
+      "size": 311
+    },
+    {
+      "md5": "08782b7c23a01e7125780468cb5e0b46",
+      "path": "planilha.xlsx",
+      "size": 267
+    }
+  ],
+  "format": "zip",
+  "recovered": false,
+  "skipped": []
+}

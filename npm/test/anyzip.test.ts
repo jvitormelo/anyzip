@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import { AnyzipError, detect, extract, extractEach, list } from '../anyzip.js'
 import type { Entry } from '../anyzip.js'
 
@@ -172,6 +172,80 @@ test('nested archives come back as plain entries', async () => {
   assert.ok(inner)
   const again = await extract(inner.data)
   assert.equal(again.entries.length, 2)
+})
+
+test('recipe: flatten zip + 7z + rar up to 2 levels into leaf files only', async () => {
+  const zipContainers = new Set(['.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.epub', '.jar', '.apk'])
+  const isNested = (path: string, data: Buffer): boolean =>
+    !zipContainers.has(extname(path).toLowerCase()) && detect(data) !== null
+
+  async function extractFlat(
+    bytes: Uint8Array | ArrayBuffer,
+    { maxDepth = 2, maxEntries = 10_000, maxTotalBytes = 512 << 20, maxRatio = 1000 } = {},
+  ): Promise<Entry[]> {
+    const files: Entry[] = []
+    let remainingEntries = maxEntries
+    let remainingBytes = maxTotalBytes
+
+    async function walk(buf: Uint8Array | ArrayBuffer, prefix: string, depth: number): Promise<void> {
+      await extractEach(
+        buf,
+        async (entry) => {
+          remainingEntries -= 1
+          remainingBytes -= entry.data.length
+          if (remainingEntries < 0 || remainingBytes < 0) {
+            throw new AnyzipError('tooLarge', 'nested archive limit exceeded')
+          }
+          const path = prefix ? `${prefix}/${entry.path}` : entry.path
+          if (depth < maxDepth && isNested(entry.path, entry.data)) {
+            await walk(entry.data, path, depth + 1)
+            return
+          }
+          files.push({ path, data: entry.data })
+        },
+        {
+          maxEntries: remainingEntries,
+          maxEntryBytes: remainingBytes,
+          maxTotalBytes: remainingBytes,
+          maxRatio,
+        },
+      )
+    }
+
+    await walk(bytes, '', 0)
+    return files
+  }
+
+  const archive = fixture('generated/zip_nested_2levels.zip')
+  const files = await extractFlat(archive, { maxDepth: 2 })
+  const byPath = new Map(files.map((f) => [f.path, f.data]))
+
+  assert.deepEqual([...byPath.keys()].sort(), [
+    'edital1.txt',
+    'lote_7z.7z/edital1.txt',
+    'lote_7z.7z/sub_zip.zip/edital1.txt',
+    'lote_rar.rar/edital1.txt',
+    'lote_rar.rar/sub_7z.7z/edital1.txt',
+    'lote_zip.zip/edital1.txt',
+    'lote_zip.zip/sub_rar.rar/edital1.txt',
+    'planilha.xlsx',
+  ])
+  assert.equal(byPath.get('edital1.txt')?.toString(), 'edital raiz\n')
+  assert.equal(byPath.get('lote_7z.7z/edital1.txt')?.toString(), 'edital 7z nivel 1\n')
+  assert.equal(byPath.get('lote_7z.7z/sub_zip.zip/edital1.txt')?.toString(), 'edital zip nivel 2\n')
+  assert.equal(byPath.get('lote_rar.rar/edital1.txt')?.toString(), 'edital rar nivel 1\n')
+  assert.equal(byPath.get('lote_rar.rar/sub_7z.7z/edital1.txt')?.toString(), 'edital 7z nivel 2\n')
+  assert.equal(byPath.get('lote_zip.zip/edital1.txt')?.toString(), 'edital zip nivel 1\n')
+  assert.equal(byPath.get('lote_zip.zip/sub_rar.rar/edital1.txt')?.toString(), 'edital rar nivel 2\n')
+  assert.equal(detect(byPath.get('planilha.xlsx') ?? Buffer.alloc(0)), 'zip')
+
+  const depth1 = await extractFlat(archive, { maxDepth: 1 })
+  assert.ok(depth1.some((f) => f.path === 'lote_7z.7z/sub_zip.zip'))
+  assert.ok(depth1.some((f) => f.path === 'lote_rar.rar/sub_7z.7z'))
+  assert.ok(depth1.some((f) => f.path === 'lote_zip.zip/sub_rar.rar'))
+
+  await rejectsWith(extractFlat(archive, { maxEntries: 5 }), 'tooLarge')
+  await rejectsWith(extractFlat(archive, { maxTotalBytes: 50 }), 'tooLarge')
 })
 
 test('extractEach: entries in order, backpressure, summary', async () => {

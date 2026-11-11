@@ -58,6 +58,7 @@ export type AnyzipErrorCode = 'unsupported' | 'corrupt' | 'encrypted' | 'multiVo
 export declare class AnyzipError extends Error {
   readonly name: 'AnyzipError'
   readonly code: AnyzipErrorCode
+  constructor(code: AnyzipErrorCode, message: string)
 }
 
 /** Format from the first bytes, or `null`. Synchronous. */

@@ -8,7 +8,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.88"
-repository = "https://github.com/licitei/anyzip"
+repository = "https://github.com/jvitormelo/anyzip"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

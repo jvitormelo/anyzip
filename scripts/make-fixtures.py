@@ -364,6 +364,69 @@ def rars():
     write("rar5_volume_part2.rar", sig + main_vol2 + s_prev + mid_a + mid_b + s_next + end_next)
 
 
+def rar5_archive(members):
+    sig = b"Rar!\x1a\x07\x01\x00"
+    main_hdr = rar5_block(1, 0, rar5_vint(0))
+    end_hdr = rar5_block(5, 0, rar5_vint(0))
+    body = b"".join(rar5_file(name, data) for name, data in members.items())
+    return sig + main_hdr + body + end_hdr
+
+
+def sevenz_archive(tmp, tag, members):
+    src = os.path.join(tmp, tag)
+    os.makedirs(src)
+    for rel, data in members.items():
+        full = os.path.join(src, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "wb") as f:
+            f.write(data)
+    for root, dirs, names in os.walk(src):
+        for n in dirs + names:
+            os.utime(os.path.join(root, n), (1_700_000_000, 1_700_000_000), follow_symlinks=False)
+    target = os.path.join(tmp, f"{tag}.7z")
+    subprocess.run(["7z", "a", "-bd", "-bso0", "-bsp0", "-m0=lzma2", target, "."], cwd=src,
+                   check=True)
+    with open(target, "rb") as f:
+        return f.read()
+
+
+def zip_archive(members):
+    z = Zip()
+    for name, data in members.items():
+        z.add(name, data, flags=FLAG_UTF8)
+    return z.bytes()
+
+
+def nested_2levels(tmp):
+    sub_zip = zip_archive({"edital1.txt": b"edital zip nivel 2\n"})
+    sub_7z = sevenz_archive(tmp, "sub_7z", {"edital1.txt": b"edital 7z nivel 2\n"})
+    sub_rar = rar5_archive({"edital1.txt": b"edital rar nivel 2\n"})
+
+    lote_7z = sevenz_archive(tmp, "lote_7z", {
+        "edital1.txt": b"edital 7z nivel 1\n",
+        "sub_zip.zip": sub_zip,
+    })
+    lote_rar = rar5_archive({
+        "edital1.txt": b"edital rar nivel 1\n",
+        "sub_7z.7z": sub_7z,
+    })
+    lote_zip = zip_archive({
+        "edital1.txt": b"edital zip nivel 1\n",
+        "sub_rar.rar": sub_rar,
+    })
+    xlsx = zip_archive({
+        "[Content_Types].xml": b"<Types/>\n",
+        "xl/workbook.xml": b"<workbook/>\n",
+    })
+    write("zip_nested_2levels.zip", zip_archive({
+        "edital1.txt": b"edital raiz\n",
+        "lote_7z.7z": lote_7z,
+        "lote_rar.rar": lote_rar,
+        "lote_zip.zip": lote_zip,
+        "planilha.xlsx": xlsx,
+    }))
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     zips()
@@ -372,7 +435,9 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         sevenz(tmp)
         zip_cli(tmp)
+        nested_2levels(tmp)
     print("fixtures written to", OUT, file=sys.stderr)
 
 
-main()
+if __name__ == "__main__":
+    main()

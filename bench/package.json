@@ -7,7 +7,7 @@
     "bench:node": "node bench.ts"
   },
   "dependencies": {
-    "@licitei/anyzip": "workspace:*",
+    "anyzip": "workspace:*",
     "fflate": "^0.8.2",
     "libarchive-wasm": "^1.2.0"
   }
