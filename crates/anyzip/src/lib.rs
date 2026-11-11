@@ -29,6 +29,7 @@ mod zip;
 
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use detect::{Format, detect};
 pub use error::{Error, ErrorCode};
@@ -142,6 +143,29 @@ pub fn extract(bytes: &[u8], limits: &Limits) -> Result<Extracted, Error> {
 pub fn extract_each(
     bytes: &[u8],
     limits: &Limits,
+    on_entry: impl FnMut(Entry) -> ControlFlow<()>,
+) -> Result<Summary, Error> {
+    extract_each_inner(bytes, limits, None, on_entry)
+}
+
+/// Like [`extract_each`], plus a cooperative `cancel` flag checked between decode chunks so an
+/// external caller can abort mid-entry without waiting for a large entry to finish decoding.
+///
+/// # Errors
+/// Same as [`extract`].
+pub fn extract_each_with_cancel(
+    bytes: &[u8],
+    limits: &Limits,
+    cancel: &AtomicBool,
+    on_entry: impl FnMut(Entry) -> ControlFlow<()>,
+) -> Result<Summary, Error> {
+    extract_each_inner(bytes, limits, Some(cancel), on_entry)
+}
+
+fn extract_each_inner(
+    bytes: &[u8],
+    limits: &Limits,
+    cancel: Option<&AtomicBool>,
     mut on_entry: impl FnMut(Entry) -> ControlFlow<()>,
 ) -> Result<Summary, Error> {
     let mut stopped = false;
@@ -150,7 +174,8 @@ pub fn extract_each(
         stopped |= flow.is_break();
         flow
     };
-    let (format, out) = run(bytes, limits, false, &mut callback)?;
+    let (format, out) = run(bytes, limits, false, cancel, &mut callback)?;
+    stopped |= cancel.is_some_and(|c| c.load(Ordering::Relaxed));
     Ok(Summary {
         format,
         entries: out.emitted,
@@ -166,7 +191,7 @@ pub fn extract_each(
 /// Same codes as [`extract`]; data errors (bad checksums) are not detected.
 pub fn list(bytes: &[u8], limits: &Limits) -> Result<Listing, Error> {
     let mut ignore = |_| ControlFlow::Continue(());
-    let (format, out) = run(bytes, limits, true, &mut ignore)?;
+    let (format, out) = run(bytes, limits, true, None, &mut ignore)?;
     Ok(Listing {
         format,
         entries: out.listed,
@@ -186,6 +211,7 @@ fn run(
     bytes: &[u8],
     limits: &Limits,
     list_only: bool,
+    cancel: Option<&AtomicBool>,
     on_entry: &mut dyn FnMut(Entry) -> ControlFlow<()>,
 ) -> Result<(Format, Finished), Error> {
     let format = match detect::signature(bytes) {
@@ -200,7 +226,7 @@ fn run(
             ));
         }
     };
-    let mut budget = Budget::new(limits, bytes.len());
+    let mut budget = Budget::new(limits, bytes.len(), cancel);
     let mut out = Out::new(list_only, on_entry);
     // A panic in a decoder is a bug triggered by hostile input; it must not take the process down.
     let result = catch_unwind(AssertUnwindSafe(|| match format {
@@ -232,6 +258,35 @@ fn run(
                 .or_else(|| panic.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "decoder panicked".to_owned());
             Err(Error::corrupt(format!("decoder panicked: {message}")))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cancel_stops_across_formats() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+        for rel in [
+            "generated/zip_cp850_noflag.zip",
+            "generated/7z_utf8_solid.7z",
+            "libarchive/rar5_multiple_files_solid.rar",
+        ] {
+            let bytes = std::fs::read(root.join(rel)).unwrap();
+            let cancel = AtomicBool::new(false);
+            let mut seen = 0usize;
+            let summary = extract_each_with_cancel(&bytes, &Limits::default(), &cancel, |_| {
+                seen += 1;
+                cancel.store(true, Ordering::SeqCst);
+                ControlFlow::Continue(())
+            })
+            .unwrap();
+            assert_eq!(seen, 1, "{rel}");
+            assert_eq!(summary.entries, 1, "{rel}");
+            assert!(summary.stopped, "{rel}");
+            assert!(!summary.recovered, "{rel}");
         }
     }
 }

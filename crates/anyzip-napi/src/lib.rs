@@ -16,7 +16,7 @@
 
 use std::ops::ControlFlow;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+use std::sync::mpsc::{Receiver, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -255,7 +255,7 @@ pub fn list(bytes: Uint8Array, limits: Option<Limits>) -> Result<AsyncTask<ListT
 }
 
 // ---------------------------------------------------------------------------------------------
-// extractEach: pull-based, one entry at a time
+// extractEach: demand-driven, one entry at a time
 // ---------------------------------------------------------------------------------------------
 
 pub enum Message {
@@ -263,23 +263,42 @@ pub enum Message {
     Done(std::result::Result<anyzip::Summary, anyzip::Error>),
 }
 
-/// Receiver side of a running extraction. Dropping the receiver makes the worker's next `send`
-/// fail, which stops the extraction.
+/// Shared state between `EachIterator` and its worker thread.
 struct Shared {
-    receiver: Mutex<Option<Receiver<Message>>>,
-    cancelled: AtomicBool,
+    cmd_tx: Mutex<Option<SyncSender<()>>>,
+    reply_rx: Mutex<Option<Receiver<Message>>>,
+    worker: Mutex<Option<thread::JoinHandle<()>>>,
+    cancelled: Arc<AtomicBool>,
 }
 
 impl Shared {
-    fn finish(&self) {
-        if let Ok(mut guard) = self.receiver.lock() {
+    fn signal_stop(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        if let Ok(mut guard) = self.cmd_tx.lock() {
+            guard.take();
+        }
+    }
+
+    fn join_worker(&self) {
+        let handle = self.worker.lock().ok().and_then(|mut guard| guard.take());
+        if let Some(handle) = handle {
+            let _ = handle.join();
+        }
+        if let Ok(mut guard) = self.reply_rx.try_lock() {
             guard.take();
         }
     }
 }
 
-/// An extraction running on its own thread. `next()` hands over one entry; the worker decodes
-/// the following entry meanwhile and then waits until it is asked for it (rendezvous channel).
+impl Drop for Shared {
+    fn drop(&mut self) {
+        self.signal_stop();
+    }
+}
+
+/// An extraction running on its own thread. Strictly demand-driven: the worker decodes one entry
+/// per `next()` call and parks before touching the following entry, so peak memory is the archive
+/// plus one entry and an early error in `onEntry` never decodes subsequent entries.
 #[napi]
 pub struct EachIterator {
     shared: Arc<Shared>,
@@ -295,14 +314,33 @@ impl EachIterator {
         })
     }
 
-    /// Stops the extraction early. Never blocks the JS thread: if a `next()` is waiting for the
-    /// worker, that task drops the channel when it wakes up.
-    #[napi]
-    pub fn close(&self) {
-        self.shared.cancelled.store(true, Ordering::SeqCst);
-        if let Ok(mut guard) = self.shared.receiver.try_lock() {
-            guard.take();
-        }
+    /// Stops the extraction early and waits (off the event loop) until the worker thread exits and
+    /// releases its reference to the input buffer.
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn close(&self) -> AsyncTask<CloseTask> {
+        self.shared.signal_stop();
+        AsyncTask::new(CloseTask {
+            shared: Arc::clone(&self.shared),
+        })
+    }
+}
+
+pub struct CloseTask {
+    shared: Arc<Shared>,
+}
+
+impl Task for CloseTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        self.shared.signal_stop();
+        self.shared.join_worker();
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, (): Self::Output) -> Result<Self::JsValue> {
+        Ok(())
     }
 }
 
@@ -317,20 +355,36 @@ impl Task for NextTask {
     fn compute(&mut self) -> Result<Self::Output> {
         let mut guard = self
             .shared
-            .receiver
+            .reply_rx
             .lock()
             .map_err(|_| Error::new(Status::GenericFailure, "extractEach state poisoned"))?;
         if self.shared.cancelled.load(Ordering::SeqCst) {
             guard.take();
+            drop(guard);
+            self.shared.join_worker();
             return Ok(None);
         }
+        if let Ok(cmd) = self.shared.cmd_tx.lock()
+            && let Some(tx) = cmd.as_ref()
+        {
+            let _ = tx.try_send(());
+        }
         let Some(receiver) = guard.as_ref() else {
+            drop(guard);
+            self.shared.join_worker();
             return Ok(None);
         };
         let message = receiver.recv().ok();
-        if self.shared.cancelled.load(Ordering::SeqCst) {
+        let was_cancelled = self.shared.cancelled.load(Ordering::SeqCst);
+        let finished = !matches!(message, Some(Message::Entry(_)));
+        if finished || was_cancelled {
             guard.take();
-            return Ok(None);
+            drop(guard);
+            self.shared.signal_stop();
+            self.shared.join_worker();
+            if was_cancelled {
+                return Ok(None);
+            }
         }
         Ok(message)
     }
@@ -341,22 +395,16 @@ impl Task for NextTask {
                 entries: Some(vec![entry(e)]),
                 ..Outcome::empty(true)
             },
-            Some(Message::Done(Ok(summary))) => {
-                self.shared.finish();
-                Outcome {
-                    format: Some(summary.format.as_str().to_owned()),
-                    entries: Some(Vec::new()),
-                    skipped: Some(skipped(summary.skipped)),
-                    recovered: Some(summary.recovered),
-                    count: Some(u32::try_from(summary.entries).unwrap_or(u32::MAX)),
-                    stopped: Some(summary.stopped),
-                    ..Outcome::empty(true)
-                }
-            }
-            Some(Message::Done(Err(e))) => {
-                self.shared.finish();
-                Outcome::error(&e)
-            }
+            Some(Message::Done(Ok(summary))) => Outcome {
+                format: Some(summary.format.as_str().to_owned()),
+                entries: Some(Vec::new()),
+                skipped: Some(skipped(summary.skipped)),
+                recovered: Some(summary.recovered),
+                count: Some(u32::try_from(summary.entries).unwrap_or(u32::MAX)),
+                stopped: Some(summary.stopped),
+                ..Outcome::empty(true)
+            },
+            Some(Message::Done(Err(e))) => Outcome::error(&e),
             // Closed by the caller (or the worker is gone): report a stopped, empty summary.
             None => Outcome {
                 entries: Some(Vec::new()),
@@ -371,25 +419,38 @@ impl Task for NextTask {
 #[napi]
 pub fn extract_each(bytes: Uint8Array, limits: Option<Limits>) -> Result<EachIterator> {
     let limits = to_limits(limits)?;
-    let (sender, receiver): (SyncSender<Message>, Receiver<Message>) = sync_channel(0);
-    thread::Builder::new()
+    let (cmd_tx, cmd_rx): (SyncSender<()>, Receiver<()>) = sync_channel(1);
+    let (reply_tx, reply_rx) = channel();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let cancelled_worker = Arc::clone(&cancelled);
+    let handle = thread::Builder::new()
         .name("anyzip-each".to_owned())
         .spawn(move || {
-            let result = anyzip::extract_each(&bytes, &limits, |e| {
-                // The receiver is gone (closed or garbage collected): stop decoding.
-                match sender.send(Message::Entry(e)) {
-                    Ok(()) => ControlFlow::Continue(()),
-                    Err(_) => ControlFlow::Break(()),
-                }
-            });
-            let _ = sender.send(Message::Done(result));
+            if cmd_rx.recv().is_err() || cancelled_worker.load(Ordering::SeqCst) {
+                drop(bytes);
+                return;
+            }
+            let result =
+                anyzip::extract_each_with_cancel(&bytes, &limits, &cancelled_worker, |e| {
+                    if reply_tx.send(Message::Entry(e)).is_err() {
+                        return ControlFlow::Break(());
+                    }
+                    if cmd_rx.recv().is_err() || cancelled_worker.load(Ordering::SeqCst) {
+                        ControlFlow::Break(())
+                    } else {
+                        ControlFlow::Continue(())
+                    }
+                });
+            let _ = reply_tx.send(Message::Done(result));
             drop(bytes);
         })
         .map_err(|e| Error::new(Status::GenericFailure, format!("cannot start thread: {e}")))?;
     Ok(EachIterator {
         shared: Arc::new(Shared {
-            receiver: Mutex::new(Some(receiver)),
-            cancelled: AtomicBool::new(false),
+            cmd_tx: Mutex::new(Some(cmd_tx)),
+            reply_rx: Mutex::new(Some(reply_rx)),
+            worker: Mutex::new(Some(handle)),
+            cancelled,
         }),
     })
 }

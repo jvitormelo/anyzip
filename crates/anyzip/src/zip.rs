@@ -1,7 +1,7 @@
 //! zip via the `zip` crate. Entry names without the UTF-8 flag are CP850 (Windows in Portuguese),
 //! except names written by Unix/macOS tools, which are UTF-8 in practice.
 
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 
 use zip::read::read_zipfile_from_stream;
 use zip::result::ZipError;
@@ -42,6 +42,9 @@ fn read_archive(
     out: &mut Out<'_>,
 ) -> Result<(), Error> {
     for index in 0..archive.len() {
+        if budget.is_cancelled() {
+            return Ok(());
+        }
         budget.count_entry()?;
         let (name, kind, declared) = {
             let meta = archive.by_index_data(index).map_err(map_error)?;
@@ -53,7 +56,12 @@ fn read_archive(
             continue;
         };
         let mut file = archive.by_index(index).map_err(map_error)?;
-        let data = read(budget, &mut file, declared)?;
+        let data = match budget.read_entry(&mut file, declared) {
+            Ok(data) => data,
+            Err(ReadError::Limit(e)) => return Err(e),
+            Err(ReadError::Io(e)) => return Err(io_to_error(&e)),
+            Err(ReadError::Cancelled) => return Ok(()),
+        };
         drop(file);
         if out.entry(path, data).is_break() {
             return Ok(());
@@ -71,6 +79,9 @@ fn recover(
 ) -> Result<(), Error> {
     let mut cursor = Cursor::new(bytes);
     loop {
+        if budget.is_cancelled() {
+            break;
+        }
         // The end, or a cut local header or data: keep what we have.
         let Ok(Some(mut file)) = read_zipfile_from_stream(&mut cursor) else {
             break;
@@ -86,8 +97,8 @@ fn recover(
         let data = match budget.read_entry(&mut file, declared) {
             Ok(data) => data,
             Err(ReadError::Limit(e)) => return Err(e),
-            // The entry itself is cut: stop at the last complete one.
-            Err(ReadError::Io(_)) => break,
+            // The entry itself is cut (or cancelled): stop at the last complete one.
+            Err(ReadError::Io(_) | ReadError::Cancelled) => break,
         };
         drop(file);
         if out.entry(path, data).is_break() {
@@ -96,17 +107,14 @@ fn recover(
     }
     // Nothing usable (only directories, or garbage after a PK signature): still broken.
     if out.emitted == 0 && out.listed.is_empty() && out.skipped.is_empty() {
-        return Err(open_error);
+        return if budget.is_cancelled() {
+            Ok(())
+        } else {
+            Err(open_error)
+        };
     }
     out.recovered = true;
     Ok(())
-}
-
-fn read(budget: &mut Budget<'_>, reader: &mut dyn Read, declared: u64) -> Result<Vec<u8>, Error> {
-    budget.read_entry(reader, declared).map_err(|e| match e {
-        ReadError::Limit(e) => e,
-        ReadError::Io(e) => io_to_error(&e),
-    })
 }
 
 fn classify(is_dir: bool, encrypted: bool, unix_mode: Option<u32>) -> Kind {

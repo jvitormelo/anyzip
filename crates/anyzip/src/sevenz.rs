@@ -79,6 +79,9 @@ pub(crate) fn run(bytes: &[u8], budget: &mut Budget<'_>, out: &mut Out<'_>) -> R
     let threads = u32::try_from(threads).unwrap_or(1);
 
     for block_index in 0..archive.blocks.len() {
+        if budget.is_cancelled() {
+            return Ok(());
+        }
         let encrypted = archive.blocks[block_index]
             .coders
             .iter()
@@ -119,6 +122,9 @@ pub(crate) fn run(bytes: &[u8], budget: &mut Budget<'_>, out: &mut Out<'_>) -> R
 
     // Entries with no data stream and outside any block (empty files).
     for (index, entry) in archive.files.iter().enumerate() {
+        if budget.is_cancelled() {
+            return Ok(());
+        }
         if archive.stream_map.file_block_index[index].is_none()
             && let Some(path) = out.admit(entry.name.clone(), classify(entry, false), 0)
             && out.entry(path, Vec::new()).is_break()
@@ -141,6 +147,10 @@ fn decode_block<R: Read + std::io::Seek>(
             // Skipped entries in solid blocks still decode: count their bytes without buffering.
             return match budget.drain_entry(reader, |_| {}) {
                 Ok(_) => Ok(true),
+                Err(ReadError::Cancelled) => {
+                    stop.set(true);
+                    Ok(false)
+                }
                 Err(ReadError::Limit(e)) => {
                     failure = Some(e);
                     Err(SevenzError::Other("anyzip limit".into()))
@@ -155,6 +165,10 @@ fn decode_block<R: Read + std::io::Seek>(
                     return Ok(false);
                 }
                 Ok(true)
+            }
+            Err(ReadError::Cancelled) => {
+                stop.set(true);
+                Ok(false)
             }
             Err(ReadError::Limit(e)) => {
                 failure = Some(e);
@@ -275,6 +289,7 @@ impl FastLzma2<'_> {
             if let Some(path) = out.admit(entry.name.clone(), classify(entry, false), size) {
                 let data = match budget.read_entry(&mut (&mut decoder).take(size), size) {
                     Ok(data) => data,
+                    Err(ReadError::Cancelled) => return Ok(ControlFlow::Break(())),
                     Err(ReadError::Limit(e)) => return Err(e),
                     Err(ReadError::Io(e)) => return Err(corrupt(&e.to_string())),
                 };
@@ -297,19 +312,19 @@ impl FastLzma2<'_> {
             } else {
                 let mut entry_crc =
                     (entry.has_stream && entry.has_crc).then(crc32fast::Hasher::new);
-                let drained = budget
-                    .drain_entry(&mut (&mut decoder).take(size), |chunk| {
-                        if let Some(h) = entry_crc.as_mut() {
-                            h.update(chunk);
-                        }
-                        if let Some(h) = block_crc.as_mut() {
-                            h.update(chunk);
-                        }
-                    })
-                    .map_err(|e| match e {
-                        ReadError::Limit(e) => e,
-                        ReadError::Io(e) => corrupt(&e.to_string()),
-                    })?;
+                let drained = match budget.drain_entry(&mut (&mut decoder).take(size), |chunk| {
+                    if let Some(h) = entry_crc.as_mut() {
+                        h.update(chunk);
+                    }
+                    if let Some(h) = block_crc.as_mut() {
+                        h.update(chunk);
+                    }
+                }) {
+                    Ok(n) => n,
+                    Err(ReadError::Cancelled) => return Ok(ControlFlow::Break(())),
+                    Err(ReadError::Limit(e)) => return Err(e),
+                    Err(ReadError::Io(e)) => return Err(corrupt(&e.to_string())),
+                };
                 if drained != size {
                     return Err(corrupt("data ends before the declared size"));
                 }
@@ -478,7 +493,7 @@ mod tests {
         archive.stream_map.file_block_index = vec![Some(0)];
 
         let limits = crate::Limits::default();
-        let mut budget = Budget::new(&limits, bytes.len());
+        let mut budget = Budget::new(&limits, bytes.len(), None);
         let tampered = FastLzma2 {
             packed: &packed,
             dict_size: 4096,

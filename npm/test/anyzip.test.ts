@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { extname, join } from 'node:path'
+import { crc32, deflateRawSync } from 'node:zlib'
 import { AnyzipError, detect, extract, extractEach, list } from '../anyzip.js'
 import type { Entry } from '../anyzip.js'
 
@@ -246,6 +247,10 @@ test('recipe: flatten zip + 7z + rar up to 2 levels into leaf files only', async
 
   await rejectsWith(extractFlat(archive, { maxEntries: 5 }), 'tooLarge')
   await rejectsWith(extractFlat(archive, { maxTotalBytes: 50 }), 'tooLarge')
+
+  // Parallel nested bursts above UV_THREADPOOL_SIZE must never deadlock on the extractEach pool.
+  const parallelNested = await Promise.all(Array.from({ length: 20 }, () => extractFlat(archive, { maxDepth: 2 })))
+  assert.ok(parallelNested.every((out) => out.length === 8))
 })
 
 test('extractEach: entries in order, backpressure, summary', async () => {
@@ -263,16 +268,95 @@ test('extractEach: entries in order, backpressure, summary', async () => {
   assert.equal(seen.length, 4)
 })
 
-test('extractEach: a throwing callback stops the extraction', async () => {
+test('extractEach: a throwing callback stops immediately and joins worker before settling', async () => {
+  const makeTwoEntryZip = (bigPlain: Buffer): Buffer => {
+    const items = [
+      { name: '1_small.txt', plain: Buffer.from('hello') },
+      { name: '2_heavy.bin', plain: bigPlain },
+    ]
+    const locals: Buffer[] = []
+    const cds: Buffer[] = []
+    let offset = 0
+    for (const { name, plain } of items) {
+      const nb = Buffer.from(name)
+      const comp = deflateRawSync(plain, { level: 1 })
+      const crc = crc32(plain)
+      const lh = Buffer.alloc(30)
+      lh.writeUInt32LE(0x04034b50, 0)
+      lh.writeUInt16LE(20, 4)
+      lh.writeUInt16LE(8, 8)
+      lh.writeUInt32LE(crc, 14)
+      lh.writeUInt32LE(comp.length, 18)
+      lh.writeUInt32LE(plain.length, 22)
+      lh.writeUInt16LE(nb.length, 26)
+      locals.push(lh, nb, comp)
+      const cd = Buffer.alloc(46)
+      cd.writeUInt32LE(0x02014b50, 0)
+      cd.writeUInt16LE(20, 4)
+      cd.writeUInt16LE(20, 6)
+      cd.writeUInt16LE(8, 10)
+      cd.writeUInt32LE(crc, 16)
+      cd.writeUInt32LE(comp.length, 20)
+      cd.writeUInt32LE(plain.length, 24)
+      cd.writeUInt16LE(nb.length, 28)
+      cd.writeUInt32LE(offset, 42)
+      cds.push(cd, nb)
+      offset += lh.length + nb.length + comp.length
+    }
+    const cdBuf = Buffer.concat(cds)
+    const eocd = Buffer.alloc(22)
+    eocd.writeUInt32LE(0x06054b50, 0)
+    eocd.writeUInt16LE(items.length, 8)
+    eocd.writeUInt16LE(items.length, 10)
+    eocd.writeUInt32LE(cdBuf.length, 12)
+    eocd.writeUInt32LE(offset, 16)
+    return Buffer.concat([...locals, cdBuf, eocd])
+  }
+  const anyzipEachThreads = (): number => {
+    if (!existsSync('/proc/self/task')) return 0
+    return readdirSync('/proc/self/task').filter((tid) => {
+      try {
+        return readFileSync(`/proc/self/task/${tid}/comm`, 'utf8').trim() === 'anyzip-each'
+      } catch {
+        return false
+      }
+    }).length
+  }
+
   let calls = 0
+  const zip = makeTwoEntryZip(Buffer.alloc(128 * 1024 * 1024, 0x41))
+  const rssBefore = process.memoryUsage().rss
   await assert.rejects(
-    extractEach(fixture('generated/7z_nonsolid.7z'), () => {
+    extractEach(zip, () => {
       calls++
       throw new Error('stop here')
     }),
     /stop here/,
   )
   assert.equal(calls, 1)
+  // Worker must already have exited before the promise rejected, without decoding the 128 MiB entry.
+  assert.equal(anyzipEachThreads(), 0)
+  zip.fill(0)
+  const rssDeltaMb = (process.memoryUsage().rss - rssBefore) / (1024 * 1024)
+  assert.ok(rssDeltaMb < 64, `expected second 128 MiB entry not to be decoded, RSS grew by ${rssDeltaMb.toFixed(1)} MiB`)
+})
+
+test('extractEach: burst of concurrent calls is bounded by UV_THREADPOOL_SIZE', async () => {
+  const bytes = fixture('generated/zip_cp850_noflag.zip')
+  const expectedCap = Math.min(1024, Math.max(1, Number.parseInt(process.env.UV_THREADPOOL_SIZE ?? '', 10) || 4))
+  let active = 0
+  let peakActive = 0
+  await Promise.all(
+    Array.from({ length: 40 }, () =>
+      extractEach(bytes, async () => {
+        active++
+        peakActive = Math.max(peakActive, active)
+        await new Promise((r) => setTimeout(r, 5))
+        active--
+      }),
+    ),
+  )
+  assert.ok(peakActive <= expectedCap, `expected <= ${expectedCap} concurrent extractEach workers, got ${peakActive}`)
 })
 
 test('extractEach: errors surface as AnyzipError', async () => {

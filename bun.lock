@@ -18,7 +18,7 @@
     },
     "npm": {
       "name": "@jvitormelo/anyzip",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "@napi-rs/cli": "^3.4.0",
         "@types/node": "^24.0.0",

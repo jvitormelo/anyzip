@@ -45,19 +45,11 @@ pub(crate) fn run(bytes: &[u8], budget: &mut Budget<'_>, out: &mut Out<'_>) -> R
     let mut partial = info.is_volume();
 
     loop {
-        let header = match archive.read_header() {
-            Ok(Some(header)) => header,
-            Ok(None) => break,
-            Err(code) => {
-                if can_stop_after_partial(&archive, code, saw_split, out) {
-                    partial = true;
-                    break;
-                }
-                if saw_split && !has_recovered(out) {
-                    return Err(Error::new(ErrorCode::MultiVolume, "multi-volume rar"));
-                }
-                return Err(map_code(code, archive.password_requested()));
-            }
+        if budget.is_cancelled() {
+            break;
+        }
+        let Some(header) = next_header(&mut archive, saw_split, &mut partial, out)? else {
+            break;
         };
         budget.count_entry()?;
         // An entry continuing into the next volume is the last entry of this volume, and incomplete.
@@ -92,27 +84,36 @@ pub(crate) fn run(bytes: &[u8], budget: &mut Budget<'_>, out: &mut Out<'_>) -> R
         let kind = classify(&header);
         let declared = header.unpacked_size;
         let (method, dict_size_kb) = (header.method, header.dict_size_kb);
-        let name = match header.raw_name {
-            Some(raw) => decode_legacy_name(&raw),
-            None => header.name,
-        };
+        let name = header
+            .raw_name
+            .as_deref()
+            .map_or(header.name, decode_legacy_name);
         let Some(path) = out.admit(name, kind, declared) else {
-            let cont = if !out.list_only() && info.is_solid() && kind == Kind::File {
-                check_dict_limit(method, dict_size_kb, budget)?;
-                drain_solid(&mut archive, budget, saw_split, out)?
-            } else {
-                skip_entry(&mut archive, saw_split, out)?
-            };
-            if !cont {
+            let solid_file = !out.list_only() && info.is_solid() && kind == Kind::File;
+            match skip_unextracted(
+                &mut archive,
+                solid_file,
+                (method, dict_size_kb),
+                budget,
+                saw_split,
+                out,
+            )? {
+                Step::Ok(()) => continue,
+                Step::PartialEnd => {
+                    partial = true;
+                    break;
+                }
+                Step::Cancelled => break,
+            }
+        };
+        check_dict_limit(method, dict_size_kb, budget)?;
+        let data = match extract_entry(&mut archive, declared, budget, saw_split, out)? {
+            Step::Ok(data) => data,
+            Step::PartialEnd => {
                 partial = true;
                 break;
             }
-            continue;
-        };
-        check_dict_limit(method, dict_size_kb, budget)?;
-        let Some(data) = extract_entry(&mut archive, declared, budget, saw_split, out)? else {
-            partial = true;
-            break;
+            Step::Cancelled => break,
         };
         if out.entry(path, data).is_break() {
             break;
@@ -120,15 +121,41 @@ pub(crate) fn run(bytes: &[u8], budget: &mut Budget<'_>, out: &mut Out<'_>) -> R
     }
 
     if partial {
-        if !has_recovered(out) {
-            return if saw_split {
-                Err(Error::new(ErrorCode::MultiVolume, "multi-volume rar"))
-            } else {
-                Err(Error::corrupt("truncated rar with no complete entries"))
-            };
-        }
-        out.recovered = true;
+        finish_partial(saw_split, out)?;
     }
+    Ok(())
+}
+
+fn next_header(
+    archive: &mut Archive,
+    saw_split: bool,
+    partial: &mut bool,
+    out: &Out<'_>,
+) -> Result<Option<Header>, Error> {
+    match archive.read_header() {
+        Ok(header) => Ok(header),
+        Err(code) => {
+            if can_stop_after_partial(archive, code, saw_split, out) {
+                *partial = true;
+                return Ok(None);
+            }
+            if saw_split && !has_recovered(out) {
+                return Err(Error::new(ErrorCode::MultiVolume, "multi-volume rar"));
+            }
+            Err(map_code(code, archive.password_requested()))
+        }
+    }
+}
+
+fn finish_partial(saw_split: bool, out: &mut Out<'_>) -> Result<(), Error> {
+    if !has_recovered(out) {
+        return if saw_split {
+            Err(Error::new(ErrorCode::MultiVolume, "multi-volume rar"))
+        } else {
+            Err(Error::corrupt("truncated rar with no complete entries"))
+        };
+    }
+    out.recovered = true;
     Ok(())
 }
 
@@ -146,12 +173,26 @@ fn can_stop_after_partial(archive: &Archive, code: Code, saw_split: bool, out: &
     archive.is_truncated() && has_recovered(out)
 }
 
-/// Returns `Ok(false)` when the archive ended at a volume boundary or truncated tail after
-/// complete entries were already recovered.
-fn skip_entry(archive: &mut Archive, saw_split: bool, out: &Out<'_>) -> Result<bool, Error> {
+fn skip_unextracted(
+    archive: &mut Archive,
+    solid_file: bool,
+    (method, dict_size_kb): (u32, u32),
+    budget: &mut Budget<'_>,
+    saw_split: bool,
+    out: &Out<'_>,
+) -> Result<Step<()>, Error> {
+    if solid_file {
+        check_dict_limit(method, dict_size_kb, budget)?;
+        drain_solid(archive, budget, saw_split, out)
+    } else {
+        skip_entry(archive, saw_split, out)
+    }
+}
+
+fn skip_entry(archive: &mut Archive, saw_split: bool, out: &Out<'_>) -> Result<Step<()>, Error> {
     match archive.skip() {
-        Ok(()) => Ok(true),
-        Err(code) if can_stop_after_partial(archive, code, saw_split, out) => Ok(false),
+        Ok(()) => Ok(Step::Ok(())),
+        Err(code) if can_stop_after_partial(archive, code, saw_split, out) => Ok(Step::PartialEnd),
         Err(code) => Err(map_code(code, archive.password_requested())),
     }
 }
@@ -170,19 +211,33 @@ fn skip_incomplete_volume_entry(archive: &mut Archive, out: &Out<'_>) -> Result<
     }
 }
 
+enum Step<T> {
+    Ok(T),
+    PartialEnd,
+    Cancelled,
+}
+
 fn extract_entry(
     archive: &mut Archive,
     declared: u64,
     budget: &mut Budget<'_>,
     saw_split: bool,
     out: &Out<'_>,
-) -> Result<Option<Vec<u8>>, Error> {
+) -> Result<Step<Vec<u8>>, Error> {
+    if budget.is_cancelled() {
+        return Ok(Step::Cancelled);
+    }
     let mut data = Vec::new();
     let mut failure: Option<Error> = None;
+    let mut cancelled = false;
     if data.try_reserve_exact(budget.hint(declared)).is_err() {
         return Err(Error::new(ErrorCode::Io, "out of memory"));
     }
     let result = archive.test(&mut |chunk| {
+        if budget.is_cancelled() {
+            cancelled = true;
+            return Flow::Abort;
+        }
         if data.try_reserve(chunk.len()).is_err() {
             failure = Some(Error::new(ErrorCode::Io, "out of memory"));
             return Flow::Abort;
@@ -196,12 +251,15 @@ fn extract_entry(
             }
         }
     });
+    if cancelled {
+        return Ok(Step::Cancelled);
+    }
     if let Some(e) = failure {
         return Err(e);
     }
     match result {
-        Ok(()) => Ok(Some(data)),
-        Err(code) if can_stop_after_partial(archive, code, saw_split, out) => Ok(None),
+        Ok(()) => Ok(Step::Ok(data)),
+        Err(code) if can_stop_after_partial(archive, code, saw_split, out) => Ok(Step::PartialEnd),
         Err(code) => Err(map_code(code, archive.password_requested())),
     }
 }
@@ -226,10 +284,18 @@ fn drain_solid(
     budget: &mut Budget<'_>,
     saw_split: bool,
     out: &Out<'_>,
-) -> Result<bool, Error> {
+) -> Result<Step<()>, Error> {
+    if budget.is_cancelled() {
+        return Ok(Step::Cancelled);
+    }
     let mut entry: u64 = 0;
     let mut failure: Option<Error> = None;
+    let mut cancelled = false;
     let result = archive.test(&mut |chunk| {
+        if budget.is_cancelled() {
+            cancelled = true;
+            return Flow::Abort;
+        }
         entry = entry.saturating_add(chunk.len() as u64);
         match budget.add(chunk.len() as u64, entry) {
             Ok(()) => Flow::Continue,
@@ -239,12 +305,15 @@ fn drain_solid(
             }
         }
     });
+    if cancelled {
+        return Ok(Step::Cancelled);
+    }
     if let Some(e) = failure {
         return Err(e);
     }
     match result {
-        Ok(()) => Ok(true),
-        Err(code) if can_stop_after_partial(archive, code, saw_split, out) => Ok(false),
+        Ok(()) => Ok(Step::Ok(())),
+        Err(code) if can_stop_after_partial(archive, code, saw_split, out) => Ok(Step::PartialEnd),
         Err(code) => Err(map_code(code, archive.password_requested())),
     }
 }

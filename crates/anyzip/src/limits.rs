@@ -2,6 +2,7 @@
 //! sizes from headers are only an allocation hint, and a capped one.
 
 use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::error::{Error, ErrorCode};
 
@@ -44,19 +45,29 @@ impl Default for Limits {
 /// Running totals for one archive.
 pub(crate) struct Budget<'a> {
     limits: &'a Limits,
+    cancel: Option<&'a AtomicBool>,
     archive_len: u64,
     entries: u32,
     total: u64,
 }
 
 impl<'a> Budget<'a> {
-    pub(crate) fn new(limits: &'a Limits, archive_len: usize) -> Self {
+    pub(crate) fn new(
+        limits: &'a Limits,
+        archive_len: usize,
+        cancel: Option<&'a AtomicBool>,
+    ) -> Self {
         Self {
             limits,
+            cancel,
             archive_len: (archive_len as u64).max(1),
             entries: 0,
             total: 0,
         }
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.cancel.is_some_and(|c| c.load(Ordering::Relaxed))
     }
 
     /// Counts one header. Call before decompressing anything for it.
@@ -121,10 +132,16 @@ impl<'a> Budget<'a> {
         reader: &mut dyn Read,
         declared: u64,
     ) -> Result<Vec<u8>, ReadError> {
+        if self.is_cancelled() {
+            return Err(ReadError::Cancelled);
+        }
         let mut buf = Vec::new();
         buf.try_reserve_exact(self.hint(declared))
             .map_err(|_| ReadError::Limit(Error::new(ErrorCode::Io, "out of memory")))?;
         loop {
+            if self.is_cancelled() {
+                return Err(ReadError::Cancelled);
+            }
             let before = buf.len();
             // `take` + `read_to_end` lets std fill uninitialized capacity without unsafe here.
             let n = reader
@@ -150,6 +167,9 @@ impl<'a> Budget<'a> {
         let mut scratch = [0u8; 8 * 1024];
         let mut entry: u64 = 0;
         loop {
+            if self.is_cancelled() {
+                return Err(ReadError::Cancelled);
+            }
             let n = reader.read(&mut scratch).map_err(ReadError::Io)?;
             if n == 0 {
                 return Ok(entry);
@@ -181,6 +201,8 @@ pub(crate) enum ReadError {
     Io(std::io::Error),
     /// A limit was hit.
     Limit(Error),
+    /// Stopped via cooperative cancellation flag.
+    Cancelled,
 }
 
 #[cfg(test)]
@@ -190,7 +212,7 @@ mod tests {
     #[test]
     fn hint_is_capped() {
         let limits = Limits::default();
-        let b = Budget::new(&limits, usize::try_from(MIB).unwrap());
+        let b = Budget::new(&limits, usize::try_from(MIB).unwrap(), None);
         assert_eq!(b.hint(10), 10);
         assert_eq!(b.hint(u64::MAX), usize::try_from(MAX_HINT).unwrap());
     }
@@ -201,13 +223,13 @@ mod tests {
             max_ratio: 10,
             ..Limits::default()
         };
-        let mut b = Budget::new(&limits, 1000);
+        let mut b = Budget::new(&limits, 1000, None);
         assert!(b.add(MIB, MIB).is_ok());
         assert_eq!(b.add(1, MIB + 1).unwrap_err().code, ErrorCode::TooLarge);
-        let mut b = Budget::new(&limits, usize::try_from(MIB).unwrap());
+        let mut b = Budget::new(&limits, usize::try_from(MIB).unwrap(), None);
         assert!(b.add(10 * MIB, 10 * MIB).is_ok());
         assert!(b.add(1, 10 * MIB + 1).is_err());
-        let b = Budget::new(&limits, 1000);
+        let b = Budget::new(&limits, 1000, None);
         assert_eq!(b.hint(u64::MAX), usize::try_from(MIB).unwrap());
     }
 
@@ -219,10 +241,10 @@ mod tests {
             max_ratio: u32::MAX,
             ..Limits::default()
         };
-        let mut b = Budget::new(&limits, 1);
+        let mut b = Budget::new(&limits, 1, None);
         assert!(b.add(100, 100).is_ok());
         assert!(b.add(1, 101).is_err());
-        let mut b = Budget::new(&limits, 1);
+        let mut b = Budget::new(&limits, 1, None);
         assert!(b.add(100, 100).is_ok());
         assert!(b.add(51, 51).is_err());
     }
@@ -234,7 +256,7 @@ mod tests {
             max_ratio: u32::MAX,
             ..Limits::default()
         };
-        let mut b = Budget::new(&limits, 1);
+        let mut b = Budget::new(&limits, 1, None);
         let mut endless = std::io::repeat(0);
         match b.read_entry(&mut endless, u64::MAX) {
             Err(ReadError::Limit(e)) => assert_eq!(e.code, ErrorCode::TooLarge),
