@@ -24,7 +24,7 @@ jobs:
             image: quay.io/pypa/manylinux_2_28_aarch64
           - target: aarch64-apple-darwin
             platform: darwin-arm64
-            runner: macos-14
+            runner: macos-latest
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -41,10 +41,13 @@ jobs:
           ! objdump -T npm/anyzip.${{ matrix.platform }}.node | grep -oE 'GLIBC_2\.(29|[3-9][0-9])' 
       - name: Build on macOS
         if: ${{ !matrix.image }}
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
           rustup show active-toolchain || rustup toolchain install
-          cargo build --release -p anyzip-napi
-          cp target/release/libanyzip_napi.dylib npm/anyzip.${{ matrix.platform }}.node
+          rustup target add ${{ matrix.target }}
+          cargo build --release -p anyzip-napi --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/libanyzip_napi.dylib npm/anyzip.${{ matrix.platform }}.node
       - uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.platform }}
