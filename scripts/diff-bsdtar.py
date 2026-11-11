@@ -22,10 +22,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def bsdtar_files(archive):
     with tempfile.TemporaryDirectory(prefix="anyzip-diff-") as out:
-        # bsdtar asks for passphrases on the tty; stdin=DEVNULL and no tty keep it from blocking.
+        # `--passphrase ""` avoids libarchive's 1s-per-entry anti-bruteforce sleep on encrypted zips.
         proc = subprocess.run(
             ["bsdtar", "-xf", os.path.abspath(archive), "-C", out, "--no-same-owner",
-             "--no-same-permissions", "--options", "zip:hdrcharset=CP850"],
+             "--no-same-permissions", "--passphrase", "-", "--options", "zip:hdrcharset=CP850"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
             timeout=120, start_new_session=True)
         for root, dirs, _names in os.walk(out):
@@ -40,7 +40,7 @@ def bsdtar_files(archive):
                 rel = os.path.relpath(full, out).replace(os.sep, "/")
                 os.chmod(full, 0o600)  # archives may carry mode 000
                 with open(full, "rb") as f:
-                    files[rel] = hashlib.md5(f.read()).hexdigest()
+                    files[rel] = hashlib.file_digest(f, "md5").hexdigest()
         return files, proc.returncode, proc.stderr.decode("utf-8", "replace").strip()
 
 
@@ -67,6 +67,13 @@ def main():
     for archive in args.files:
         name = os.path.basename(archive)
         mine = ours[archive]
+        # Known bomb / huge-dictionary fixtures would make bsdtar allocate 4 GiB or write GiBs on
+        # small CI runners; anyzip already rejected them with `tooLarge` as expected.
+        if mine.get("error") == "tooLarge" and name in known:
+            expected += 1
+            if args.verbose:
+                print(f"expected  {name}: {known[name]}")
+            continue
         theirs, code, err = bsdtar_files(archive)
         mine_files = {e["path"]: e["md5"] for e in mine.get("entries", [])}
         if mine_files == theirs and ("error" not in mine or not theirs):
