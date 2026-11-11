@@ -27,7 +27,7 @@ jobs:
             runner: macos-14
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build in manylinux
         if: matrix.image
         run: |
@@ -45,7 +45,7 @@ jobs:
           rustup show active-toolchain || rustup toolchain install
           cargo build --release -p anyzip-napi
           cp target/release/libanyzip_napi.dylib npm/anyzip.${{ matrix.platform }}.node
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.platform }}
           path: npm/anyzip.${{ matrix.platform }}.node
@@ -59,7 +59,7 @@ jobs:
       contents: read
       id-token: write # npm provenance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check tag matches package version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#anyzip-v}"
@@ -67,15 +67,15 @@ jobs:
           test "$TAG_VERSION" = "$PKG_VERSION" || { echo "tag ($TAG_VERSION) != npm/package.json ($PKG_VERSION)"; exit 1; }
       - run: rustup show active-toolchain || rustup toolchain install
       - uses: oven-sh/setup-bun@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
       # Generates index.js / index.d.ts; the host .node it also builds is replaced below.
       - working-directory: npm
         run: bun run build
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bindings-*
           path: npm/artifacts

@@ -17,10 +17,10 @@ jobs:
     env:
       SECONDS_PER_TARGET: ${{ github.event_name == 'pull_request' && 60 || 1800 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: rustup toolchain install nightly --profile minimal
       - run: cargo +nightly install cargo-fuzz --locked
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
@@ -33,7 +33,7 @@ jobs:
             -max_total_time=$SECONDS_PER_TARGET -rss_limit_mb=2048 -timeout=10 -max_len=4194304
       # A crash or timeout becomes a regression fixture (fixtures/generated) and an issue.
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-artifacts-${{ matrix.target }}
           path: fuzz/artifacts
