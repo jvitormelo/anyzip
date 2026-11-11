@@ -24,7 +24,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install bsdtar
         run: |
-          sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://azure.archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list.d/ubuntu.sources || true
+          timeout 2 getent hosts azure.archive.ubuntu.com >/dev/null || printf 'https://mirrors.edge.kernel.org/ubuntu/\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
           sudo apt-get update && sudo apt-get install -y --no-install-recommends libarchive-tools
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
