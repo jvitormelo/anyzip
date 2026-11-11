@@ -47,7 +47,7 @@ type Result = {
 async function load(impl: Impl): Promise<Extract> {
   switch (impl) {
     case 'anyzip': {
-      const { extract } = await import('anyzip')
+      const { extract } = await import('@jvitormelo/anyzip')
       return async (bytes) => {
         const r = await extract(bytes)
         return { files: r.entries.length, bytes: r.entries.reduce((n, e) => n + e.data.length, 0) }

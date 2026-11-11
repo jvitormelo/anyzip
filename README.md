@@ -17,7 +17,7 @@ touching disk.
   - Unicode and legacy (RAR4) names in rar.
 
 ```ts
-import { extract, extractEach, list, detect, AnyzipError } from 'anyzip'
+import { extract, extractEach, list, detect, AnyzipError } from '@jvitormelo/anyzip'
 
 const { format, entries, skipped, recovered } = await extract(bytes) // Uint8Array | ArrayBuffer
 for (const { path, data } of entries) upload(path, data) // data: Buffer, no copy
@@ -88,7 +88,7 @@ functions.
   `glibc 2.34`), AWS Lambda (x86_64 and Graviton ARM64), Debian 11+, and Ubuntu 20.04+.
 - `darwin-arm64` (macOS Apple Silicon).
 - On Next.js (Vercel), mark the native addon as external in `next.config.ts`:
-  `serverExternalPackages: ['anyzip']`.
+  `serverExternalPackages: ['@jvitormelo/anyzip']`.
 
 ## Nested archives
 
@@ -101,7 +101,7 @@ To flatten nested `zip`/`7z`/`rar` archives into leaf files only:
 
 ```ts
 import { extname } from 'node:path'
-import { AnyzipError, detect, extractEach, type Entry } from 'anyzip'
+import { AnyzipError, detect, extractEach, type Entry } from '@jvitormelo/anyzip'
 
 const ZIP_CONTAINERS = new Set([
   '.docx', '.xlsx', '.pptx', '.docm', '.xlsm', '.pptm',
