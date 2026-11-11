@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "bench": "bun bench.ts",
-    "bench:node": "node bench.ts"
+    "bench:node": "node bench.ts",
+    "check": "bun bench.ts --check",
+    "check:node": "node bench.ts --check"
   },
   "dependencies": {
     "@jvitormelo/anyzip": "workspace:*",

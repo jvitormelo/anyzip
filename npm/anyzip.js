@@ -2,15 +2,17 @@
 
 // Thin wrapper over the generated N-API loader (index.js): typed errors and plain result objects.
 const { AsyncLocalStorage } = require('node:async_hooks')
+const { availableParallelism } = require('node:os')
 const native = require('./index.js')
 
+const DEFAULT_POOL = 'Bun' in globalThis ? Math.max(4, Math.min(availableParallelism(), 16)) : 4
 const eachDepth = new AsyncLocalStorage()
 let activeEach = 0
 const eachQueue = []
 
 function poolLimit() {
   const n = Number.parseInt(process.env.UV_THREADPOOL_SIZE ?? '', 10)
-  return n >= 1 ? Math.min(n, 1024) : 4
+  return n >= 1 ? Math.min(n, 1024) : DEFAULT_POOL
 }
 
 function acquireEach() {
@@ -73,6 +75,7 @@ async function extractEach(bytes, onEntry, limits) {
   const acquired = await acquireEach()
   try {
     const it = native.extractEach(buf, limits)
+    let finished = false
     try {
       return await eachDepth.run(true, async () => {
         for (;;) {
@@ -81,6 +84,7 @@ async function extractEach(bytes, onEntry, limits) {
             await onEntry(o.entries[0])
             continue
           }
+          finished = true
           return {
             format: o.format,
             entries: o.count ?? 0,
@@ -90,7 +94,7 @@ async function extractEach(bytes, onEntry, limits) {
         }
       })
     } finally {
-      await it.close()
+      if (!finished) await it.close()
     }
   } finally {
     releaseEach(acquired)

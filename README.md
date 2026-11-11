@@ -1,5 +1,8 @@
 # anyzip
 
+[![npm](https://img.shields.io/npm/v/@jvitormelo/anyzip)](https://www.npmjs.com/package/@jvitormelo/anyzip)
+[![ci](https://github.com/jvitormelo/anyzip/actions/workflows/ci.yml/badge.svg)](https://github.com/jvitormelo/anyzip/actions/workflows/ci.yml)
+
 Extracts zip, 7z and rar from bytes in memory, for Node and Bun (N-API) and Rust. Built for
 serverless pipelines (such as Vercel Functions on Node and Bun) without spawning system binaries or
 touching disk.
@@ -15,6 +18,10 @@ touching disk.
   - the 0x7075 Unicode path extra field;
   - UTF-16 names in 7z;
   - Unicode and legacy (RAR4) names in rar.
+
+```sh
+npm install @jvitormelo/anyzip
+```
 
 ```ts
 import { extract, extractEach, list, detect, AnyzipError } from '@jvitormelo/anyzip'

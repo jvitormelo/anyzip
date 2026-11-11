@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { extname, join } from 'node:path'
 import { crc32, deflateRawSync } from 'node:zlib'
 import { AnyzipError, detect, extract, extractEach, list } from '../anyzip.js'
@@ -343,11 +344,12 @@ test('extractEach: a throwing callback stops immediately and joins worker before
 
 test('extractEach: burst of concurrent calls is bounded by UV_THREADPOOL_SIZE', async () => {
   const bytes = fixture('generated/zip_cp850_noflag.zip')
-  const expectedCap = Math.min(1024, Math.max(1, Number.parseInt(process.env.UV_THREADPOOL_SIZE ?? '', 10) || 4))
+  const defaultCap = 'Bun' in globalThis ? Math.max(4, Math.min(availableParallelism(), 16)) : 4
+  const expectedCap = Math.min(1024, Math.max(1, Number.parseInt(process.env.UV_THREADPOOL_SIZE ?? '', 10) || defaultCap))
   let active = 0
   let peakActive = 0
   await Promise.all(
-    Array.from({ length: 40 }, () =>
+    Array.from({ length: 64 }, () =>
       extractEach(bytes, async () => {
         active++
         peakActive = Math.max(peakActive, active)
@@ -394,6 +396,88 @@ test('100 parallel extractions do not block the event loop', async () => {
     clearInterval(timer)
   }
   assert.ok(maxDelay < 50, `event loop blocked for ${maxDelay.toFixed(1)} ms`)
+})
+
+test('batch throughput and RSS guard (extract & extractEach)', async () => {
+  // Deterministic ~2.4 MiB archive (6 files × 400 KiB of structured data, not trivial zeros).
+  const payload = Buffer.alloc(400 * 1024)
+  for (let i = 0; i < payload.length; i++) payload[i] = (i * 31 + (i >>> 7)) & 0xff
+  const makeMultiFileZip = (): Buffer => {
+    const locals: Buffer[] = []
+    const cds: Buffer[] = []
+    let offset = 0
+    for (let idx = 0; idx < 6; idx++) {
+      const nb = Buffer.from(`doc_${idx}.bin`)
+      const comp = deflateRawSync(payload, { level: 6 })
+      const crc = crc32(payload)
+      const lh = Buffer.alloc(30)
+      lh.writeUInt32LE(0x04034b50, 0)
+      lh.writeUInt16LE(20, 4)
+      lh.writeUInt16LE(8, 8)
+      lh.writeUInt32LE(crc, 14)
+      lh.writeUInt32LE(comp.length, 18)
+      lh.writeUInt32LE(payload.length, 22)
+      lh.writeUInt16LE(nb.length, 26)
+      locals.push(lh, nb, comp)
+      const cd = Buffer.alloc(46)
+      cd.writeUInt32LE(0x02014b50, 0)
+      cd.writeUInt16LE(20, 4)
+      cd.writeUInt16LE(20, 6)
+      cd.writeUInt16LE(8, 10)
+      cd.writeUInt32LE(crc, 16)
+      cd.writeUInt32LE(comp.length, 20)
+      cd.writeUInt32LE(payload.length, 24)
+      cd.writeUInt16LE(nb.length, 28)
+      cd.writeUInt32LE(offset, 42)
+      cds.push(cd, nb)
+      offset += lh.length + nb.length + comp.length
+    }
+    const cdBuf = Buffer.concat(cds)
+    const eocd = Buffer.alloc(22)
+    eocd.writeUInt32LE(0x06054b50, 0)
+    eocd.writeUInt16LE(6, 8)
+    eocd.writeUInt16LE(6, 10)
+    eocd.writeUInt32LE(cdBuf.length, 12)
+    eocd.writeUInt32LE(offset, 16)
+    return Buffer.concat([...locals, cdBuf, eocd])
+  }
+
+  const zip = makeMultiFileZip()
+  const batch = 24
+  const totalOutMb = (batch * 6 * payload.length) / 1e6
+
+  await extract(zip)
+  await extractEach(zip, () => {})
+
+  const bestBatchMs = async (fn: () => Promise<unknown>): Promise<number> => {
+    let best = Number.POSITIVE_INFINITY
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const t0 = performance.now()
+      await Promise.all(Array.from({ length: batch }, fn))
+      best = Math.min(best, performance.now() - t0)
+    }
+    return best
+  }
+
+  const extractMs = await bestBatchMs(() => extract(zip))
+  const rssAfterFirst = process.memoryUsage().rss
+  const eachMs = await bestBatchMs(() => extractEach(zip, () => {}))
+  const rssAfterEach = process.memoryUsage().rss
+
+  const extractMbPerSec = totalOutMb / (extractMs / 1000)
+  const eachMbPerSec = totalOutMb / (eachMs / 1000)
+
+  // Realistic CI-safe floors (~10-20x below bare-metal ~1200 MB/s, catches -O0 / serialization / copy bugs).
+  assert.ok(extractMbPerSec >= 80, `extract batch throughput too low: ${extractMbPerSec.toFixed(0)} MB/s`)
+  assert.ok(eachMbPerSec >= 60, `extractEach batch throughput too low: ${eachMbPerSec.toFixed(0)} MB/s`)
+  assert.ok(
+    eachMs <= extractMs * 2.2 + 15,
+    `extractEach batch (${eachMs.toFixed(1)} ms) regressed vs extract (${extractMs.toFixed(1)} ms)`,
+  )
+
+  // RSS across 6 consecutive 24-archive bursts (~350 MB total output) must stay bounded (mimalloc purge).
+  const rssGrowthMb = (rssAfterEach - rssAfterFirst) / (1024 * 1024)
+  assert.ok(rssGrowthMb < 128, `unexpected RSS growth across batch bursts: +${rssGrowthMb.toFixed(1)} MiB`)
 })
 
 test('real consultation corpus (git-ignored when present)', { timeout: 120_000 }, async () => {

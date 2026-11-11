@@ -1,17 +1,38 @@
 {
   "name": "@jvitormelo/anyzip",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Extract zip, 7z and rar from bytes in memory. Native (Rust + UnRAR), off the event loop, safe against hostile archives.",
   "license": "(MIT OR Apache-2.0) AND LicenseRef-UnRAR",
+  "homepage": "https://github.com/jvitormelo/anyzip#readme",
+  "bugs": {
+    "url": "https://github.com/jvitormelo/anyzip/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jvitormelo/anyzip.git"
   },
+  "keywords": [
+    "zip",
+    "7z",
+    "7zip",
+    "rar",
+    "unrar",
+    "archive",
+    "extract",
+    "decompress",
+    "napi"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "main": "anyzip.js",
   "types": "anyzip.d.ts",
+  "exports": {
+    ".": {
+      "types": "./anyzip.d.ts",
+      "default": "./anyzip.js"
+    }
+  },
   "files": [
     "anyzip.js",
     "anyzip.d.ts",

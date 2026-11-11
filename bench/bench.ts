@@ -1,10 +1,11 @@
-// anyzip vs bsdtar (spawned child process), libarchive-wasm and fflate (zip only).
+// anyzip (extract + extractEach) vs bsdtar (spawned child process), libarchive-wasm and fflate.
 //
-//   bun bench.ts [FILE...]        node bench.ts [FILE...]
+//   bun bench.ts [--check] [FILE...]        node bench.ts [--check] [FILE...]
 //
 // Each (implementation, archive) pair runs in its own child process so the peak RSS belongs to it
 // alone. Times cover bytes-in-memory to every file's bytes-in-memory; bsdtar also pays for the
-// temp file, the process and reading the files back.
+// temp file, the process and reading the files back. `--check` asserts relative speed & batch
+// invariants against the other engines on the same hardware (exit 1 on regression).
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,7 +29,7 @@ const MAX_RUNS = 50
 const TIME_BUDGET_MS = 1500
 const BURST = 50
 
-type Impl = 'anyzip' | 'bsdtar' | 'libarchive-wasm' | 'fflate'
+type Impl = 'anyzip' | 'anyzip-each' | 'bsdtar' | 'libarchive-wasm' | 'fflate'
 type Extract = (bytes: Uint8Array) => Promise<{ files: number; bytes: number }>
 type Result = {
   impl: Impl
@@ -51,6 +52,18 @@ async function load(impl: Impl): Promise<Extract> {
       return async (bytes) => {
         const r = await extract(bytes)
         return { files: r.entries.length, bytes: r.entries.reduce((n, e) => n + e.data.length, 0) }
+      }
+    }
+    case 'anyzip-each': {
+      const { extractEach } = await import('@jvitormelo/anyzip')
+      return async (bytes) => {
+        let files = 0
+        let total = 0
+        await extractEach(bytes, (e) => {
+          files++
+          total += e.data.length
+        })
+        return { files, bytes: total }
       }
     }
     case 'fflate': {
@@ -161,15 +174,66 @@ function supports(impl: Impl, file: string): boolean {
   return true
 }
 
-function parent(files: string[]): void {
-  const impls: Impl[] = ['anyzip', 'bsdtar', 'libarchive-wasm', 'fflate']
+function checkInvariants(name: string, byImpl: Map<Impl, Result>): string[] {
+  const failures: string[] = []
+  const az = byImpl.get('anyzip')
+  const each = byImpl.get('anyzip-each')
+  if (!az?.ok || !az.p50 || !az.burst) {
+    failures.push(`${name}: anyzip failed (${az?.error ?? 'missing'})`)
+    return failures
+  }
+  if (!each?.ok || !each.p50 || !each.burst) {
+    failures.push(`${name}: anyzip-each failed (${each?.error ?? 'missing'})`)
+    return failures
+  }
+  // Ignore sub-MB micro-archives for timing ratios (dominates sub-ms timer / spawn noise).
+  if ((az.out ?? 0) < 1_000_000) return failures
+
+  const checkRatio = (label: string, actual: number, ref: number, maxRatio: number): void => {
+    const ratio = actual / ref
+    if (ratio > maxRatio) {
+      failures.push(`${name} [${label}]: ${actual.toFixed(1)} ms vs ${ref.toFixed(1)} ms (${ratio.toFixed(2)}x > ${maxRatio}x)`)
+    }
+  }
+
+  // Batch & single parity between extractEach and extract.
+  checkRatio('anyzip-each/anyzip p50', each.p50, az.p50, 1.35)
+  checkRatio('anyzip-each/anyzip burst', each.burst, az.burst, 1.35)
+
+  const ff = byImpl.get('fflate')
+  if (ff?.ok && ff.p50 && ff.burst) {
+    checkRatio('anyzip/fflate p50', az.p50, ff.p50, 0.7)
+    checkRatio('anyzip/fflate burst', az.burst, ff.burst, 0.3)
+  }
+  const wasm = byImpl.get('libarchive-wasm')
+  if (name.endsWith('.7z') && wasm?.ok && wasm.p50 && wasm.burst) {
+    checkRatio('anyzip/libarchive-wasm p50', az.p50, wasm.p50, 0.65)
+    checkRatio('anyzip/libarchive-wasm burst', az.burst, wasm.burst, 0.25)
+  }
+  const tar = byImpl.get('bsdtar')
+  if (tar?.ok && tar.p50 && tar.burst) {
+    if (name.endsWith('.zip')) {
+      checkRatio('anyzip/bsdtar zip p50', az.p50, tar.p50, 1.0)
+      checkRatio('anyzip/bsdtar zip burst', az.burst, tar.burst, 1.0)
+    } else if (name === 'copied_a0.7z') {
+      checkRatio('anyzip/bsdtar multi-chunk 7z p50', az.p50, tar.p50, 0.6)
+    }
+  }
+  return failures
+}
+
+function parent(files: string[], check: boolean): void {
+  const impls: Impl[] = ['anyzip', 'anyzip-each', 'bsdtar', 'libarchive-wasm', 'fflate']
   const runtime = 'Bun' in globalThis ? `bun ${process.versions.bun}` : `node ${process.versions.node}`
   console.log(`runtime: ${runtime}; burst = ${BURST} concurrent extractions\n`)
   console.log('| archive | size | impl | files | out MB | p50 ms | p99 ms | MB/s | burst ms | RSS MB | burst RSS MB |')
   console.log('|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|')
+  const failures: string[] = []
   for (const file of files) {
     const size = statSync(file).size
+    const name = basename(file)
     let reference: Result | undefined
+    const byImpl = new Map<Impl, Result>()
     for (const impl of impls) {
       if (!supports(impl, file)) continue
       const p = spawnSync(process.execPath, [import.meta.filename, '--child', impl, file], {
@@ -184,8 +248,8 @@ function parent(files: string[]): void {
       } catch {
         r = { impl, file, ok: false, error: (p.stderr || `exit ${p.status}`).trim().split('\n')[0] }
       }
+      byImpl.set(impl, r)
       if (impl === 'anyzip') reference = r
-      const name = basename(file)
       if (!r.ok) {
         console.log(`| ${name} | ${mb(size)} | ${impl} | error: ${r.error?.slice(0, 60)} | | | | | | | |`)
         continue
@@ -196,6 +260,15 @@ function parent(files: string[]): void {
           `${r.p99?.toFixed(1)} | ${((r.out ?? 0) / 1e6 / ((r.p50 ?? 1) / 1e3)).toFixed(0)} | ` +
           `${r.burst?.toFixed(0)} | ${mbKb(r.rssKb)} | ${mbKb(r.burstRssKb)} |`,
       )
+    }
+    if (check) failures.push(...checkInvariants(name, byImpl))
+  }
+  if (check) {
+    if (failures.length > 0) {
+      console.error(`\nREGRESSIONS (${failures.length}):\n  - ${failures.join('\n  - ')}`)
+      process.exitCode = 1
+    } else {
+      console.log('\ncheck: all relative speed and batch invariants passed.')
     }
   }
 }
@@ -212,10 +285,12 @@ if (args[0] === '--child') {
     console.log(JSON.stringify({ impl, file, ok: false, error: String((e as Error).message ?? e) }))
   }
 } else {
-  const files = (args.length ? args : DEFAULT_FILES.map((f) => join(FIXTURES, f))).filter((f) => {
+  const check = args.includes('--check')
+  const positional = args.filter((a) => a !== '--check')
+  const files = (positional.length ? positional : DEFAULT_FILES.map((f) => join(FIXTURES, f))).filter((f) => {
     if (existsSync(f)) return true
     console.error(`skipping missing ${f} (run scripts/make-real-corpus.py for fixtures/real)`)
     return false
   })
-  parent(files)
+  parent(files, check)
 }
